@@ -1,0 +1,13 @@
+[package]
+name = "rustcv"
+version = "0.1.0"
+edition = "2021"
+authors = ["LyonRust <echo_ai@foxmail.com>"]
+description = "Rust Computer Vision Library"
+license = "MIT"
+repository = "https://github.com/RustCV/RustCV"
+keywords = ["RustCV", "Version"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
