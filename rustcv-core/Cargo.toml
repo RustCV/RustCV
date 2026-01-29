@@ -1,0 +1,68 @@
+[package]
+name = "rustcv-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Leon <echo_ai@foxmail.com>"]
+description = "Core abstractions for RustCV: High-performance, zero-copy camera driver interface."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/rustcv/rustcv"
+keywords = ["camera", "video", "driver", "robotics", "computer-vision"]
+categories = ["hardware-support", "multimedia::video", "science::robotics"]
+
+# 专家建议：库的 Core 层应该尽量轻量，避免锁死具体的 Async Runtime (如 Tokio)。
+# 我们只依赖必要的 Trait 定义。
+
+[dependencies]
+# 1. 错误处理 - 工业级库标配
+# 用于定义那个复杂的 CameraError 枚举
+thiserror = "1.0"
+
+# 2. 异步抽象 - 必需
+# 虽然 Rust 原生 async fn in trait 已稳定，但在库层面为了最大兼容性
+# 和对象安全性 (Object Safety)，async-trait 仍然是目前的最佳实践。
+async-trait = "0.1"
+futures-core = "0.3" # 用于定义 Stream Trait
+
+# 3. 日志与追踪 - 必选
+# 在 FFI 边界和驱动内部提供结构化日志
+tracing = "0.1"
+
+# 4. 序列化与配置 - 可选特性
+# 用于 "export_state" 和 "Config Persistence"
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+
+# 5. 低级内存操作 - 必选
+# 用于 Frame 数据的安全转换 (Cast)，处理 Stride 和 Padding
+bytemuck = "1.14"
+
+# 6. 位掩码 - 必选
+# 用于定义 Capabilities (e.g., SupportsAutoExposure | SupportsTrigger)
+bitflags = "2.4"
+
+# 7. 系统级类型 - 必选
+# 用于 FFI 互操作 (RawFd, c_void 等)，确保跨平台定义一致
+libc = "0.2"
+
+# 8. 平台差异化控制
+cfg-if = "1.0"
+
+[features]
+default = ["std", "serialize"]
+
+# 标准库支持 (预留给未来可能的 no_std 支持)
+std = []
+
+# 开启序列化支持 (用于保存相机参数)
+serialize = ["dep:serde", "dep:serde_json"]
+
+# 开启仿真注入支持 (PipeSynth 专用)
+simulation = []
+
+# 开启不稳定的实验性 API (如 GPU 导入)
+unstable = []
+
+[dev-dependencies]
+# 仅用于运行单元测试，不影响最终库的用户
+tokio = { version = "1.0", features = ["full", "test-util"] }
+anyhow = "1.0"

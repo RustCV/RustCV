@@ -1,0 +1,54 @@
+[package]
+name = "rustcv-backend-v4l2"
+version = "0.1.0"
+edition = "2021"
+description = "Linux V4L2 backend for RustCV"
+
+[features]
+simulation = []
+
+[dependencies]
+# 1. 核心库 (路径依赖，假设在同一 Workspace 下)
+rustcv-core = { path = "../rustcv-core" }
+
+# 2. V4L2 绑定
+# 我们使用 v4l crate 作为基础封装，它覆盖了大部分 ioctl
+v4l = "0.14"
+
+# 3. 系统级调用
+# 用于 mmap, munmap, RawFd 处理
+nix = { version = "0.27", features = ["fs", "mman"] }
+libc = "0.2"
+
+# 4. 异步运行时
+tokio = { version = "1.0", features = [
+    "fs",
+    "rt",
+] } # 用于异步 I/O (尽管 V4L2 本质是阻塞的，我们需要在阻塞线程中运行)
+async-trait = "0.1"
+
+# 5. 日志
+tracing = "0.1"
+thiserror = "1.0"
+
+# 6. 其他工具
+bitflags = "2.4"
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+# Web 服务器
+axum = "0.7"
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = "0.3"
+bytes = "1.0"
+# 图像编码 (用于将 Raw 数据转为 JPEG)
+image = "0.24"
+# 用于示例中的窗口显示 (轻量级，无复杂依赖)
+minifb = "0.24"
+# 用于示例中的错误处理
+anyhow = "1.0"
+# 用于运行异步 main 函数
+tokio = { version = "1.0", features = ["full"] }
+tracing-subscriber = "0.3.22"

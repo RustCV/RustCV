@@ -1,2 +1,9 @@
 [workspace]
-members = ["rustcv"]
+members = [
+    "rustcv-backend-avf",
+    "rustcv-backend-msmf",
+    "rustcv-backend-v4l2",
+    "rustcv-core",
+    "rustcv-simulation",
+]
+resolver = "2"
