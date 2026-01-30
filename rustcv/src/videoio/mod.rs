@@ -5,203 +5,315 @@ use crate::internal::runtime;
 use anyhow::{anyhow, Result};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use rustcv_core::builder::CameraConfig;
+use rustcv_core::pixel_format::{FourCC, PixelFormat};
 use rustcv_core::traits::Stream;
-// use std::sync::Arc;
 
-/// 指令：主线程发送给后台 Worker 的命令
+/// 指令：主线程 -> 后台
 enum Command {
-    /// 请求下一帧
     NextFrame,
-    /// 释放资源（可选，因为 Drop 会自动断开 channel）
+    SetResolution(u32, u32), // 【新增】设置分辨率
     Stop,
 }
 
-/// 响应：后台 Worker 发回的数据
+/// 响应：后台 -> 主线程
 enum Response {
-    /// 成功获取一帧数据 (宽度, 高度, 原始数据)
     FrameData {
         width: u32,
         height: u32,
-        data: Vec<u8>, // 所有权数据
+        data: Vec<u8>,
+        fourcc: u32,
     },
-    /// 发生错误
+    PropertySet, // 【新增】属性设置成功确认
     Error(String),
-    /// 流结束
+    #[allow(dead_code)]
     EndOfStream,
 }
 
-/// 经典的 OpenCV 风格视频捕获类
 pub struct VideoCapture {
-    // 发送指令的通道
     cmd_tx: Sender<Command>,
-    // 接收数据的通道
     res_rx: Receiver<Response>,
-    // 记录属性
     width: i32,
     height: i32,
     is_opened: bool,
 }
 
 impl VideoCapture {
-    /// 打开摄像头设备 (例如 index=0)
     pub fn new(index: u32) -> Result<Self> {
-        // 1. 获取驱动
+        // 1. 创建驱动 (移动到后台线程前先创建)
         let driver = backend::create_driver()?;
 
-        // 2. 转换 index 为设备 ID 字符串 (简单处理：假设列表顺序即 index)
+        // 2. 查找设备 ID
         let devices = driver
             .list_devices()
             .map_err(|e| anyhow!("Failed to list devices: {}", e))?;
-
         let device_id = devices
             .get(index as usize)
             .ok_or_else(|| anyhow!("Camera index {} out of range", index))?
             .id
             .clone();
 
-        // 3. 配置参数 (默认 VGA，后续通过 set 调整)
-        let config = CameraConfig::new(); // 使用默认配置
-
-        // 4. 打开流 (这一步可能涉及 IO，但通常很快)
-        // 注意：这里是在主线程打开 Stream，随后我们需要把它 move 到后台线程
-        let (mut stream, _controls) = driver
-            .open(&device_id, config)
-            .map_err(|e| anyhow!("Failed to open camera: {}", e))?;
-
-        // 5. 创建同步通道 (Rendezvous channel，容量为0或1，保证背压)
-        // 主线程 -> 后台
+        // 3. 创建通道
         let (cmd_tx, cmd_rx) = bounded::<Command>(1);
-        // 后台 -> 主线程
         let (res_tx, res_rx) = bounded::<Response>(1);
 
-        // 6. 【关键魔法】启动后台异步任务
-        // 我们不等待这个任务结束，它会在后台一直跑，直到 VideoCapture 被 Drop
+        // 4. 【升级】启动后台任务
+        // 我们将 driver 和 device_id 移动到后台，让后台全权管理生命周期
         runtime::get_runtime().spawn(async move {
-            // 在后台先启动流
-            if let Err(e) = stream.start().await {
-                let _ = res_tx.send(Response::Error(format!("Stream start failed: {}", e)));
-                return;
+            // 初始配置 (默认)
+            let mut current_config = CameraConfig::new();
+            // 当前流 (Option，允许为空以便重启)
+            let mut current_stream: Option<Box<dyn Stream>> = None;
+
+            // 内部辅助：尝试打开流
+            // 这是一个闭包无法捕获 async 引用，所以我们用 macro 或者简单的代码块复用逻辑
+            // 这里为了简单，直接在循环外先尝试打开一次
+            match driver.open(&device_id, current_config.clone()) {
+                Ok((s, _)) => {
+                    // 启动流
+                    let mut s = s;
+                    if let Err(e) = s.start().await {
+                        let _ = res_tx.send(Response::Error(format!("Stream start failed: {}", e)));
+                        return;
+                    }
+                    current_stream = Some(s);
+                }
+                Err(e) => {
+                    // 初始打开失败不要紧，后续 NextFrame 会报错，或者允许 SetResolution 修复
+                    eprintln!("Warning: Initial open failed: {}", e);
+                }
             }
 
-            // 循环等待指令
+            // 循环处理指令
             while let Ok(cmd) = cmd_rx.recv() {
                 match cmd {
                     Command::NextFrame => {
-                        match stream.next_frame().await {
-                            Ok(frame) => {
-                                // 【Buffer Swapping 基础】
-                                // 我们必须在这里把 Frame<'a> 的数据拷贝到 Owned Vec
-                                // 因为 'a 不能逃逸出 async 块。
-                                // 这是一个 "Driver -> Heap" 的拷贝。
-                                let data_vec = frame.data.to_vec();
-                                let w = frame.width;
-                                let h = frame.height;
+                        if let Some(stream) = current_stream.as_mut() {
+                            match stream.next_frame().await {
+                                Ok(frame) => {
+                                    let data_vec = frame.data.to_vec();
+                                    let w = frame.width;
+                                    let h = frame.height;
+                                    // 提取 FourCC
+                                    let fourcc_val: u32 = match frame.format {
+                                        PixelFormat::Known(fcc) => fcc.0,
+                                        PixelFormat::Unknown(val) => val,
+                                    };
 
-                                // 发送回主线程
-                                let _ = res_tx.send(Response::FrameData {
-                                    width: w,
-                                    height: h,
-                                    data: data_vec,
-                                });
+                                    let _ = res_tx.send(Response::FrameData {
+                                        width: w,
+                                        height: h,
+                                        data: data_vec,
+                                        fourcc: fourcc_val,
+                                    });
+                                }
+                                Err(e) => {
+                                    let _ = res_tx.send(Response::Error(e.to_string()));
+                                }
+                            }
+                        } else {
+                            let _ = res_tx.send(Response::Error("Camera not opened".into()));
+                        }
+                    }
+
+                    // 【核心逻辑】设置分辨率 = 热重载
+                    Command::SetResolution(w, h) => {
+                        // 1. 停止并销毁旧流
+                        if let Some(mut stream) = current_stream.take() {
+                            let _ = stream.stop().await;
+                            // stream 被 Drop，硬件资源释放
+                        }
+
+                        // 2. 更新配置
+                        current_config = CameraConfig::new().resolution(
+                            w,
+                            h,
+                            rustcv_core::prelude::Priority::Required,
+                        );
+
+                        // 3. 重新打开驱动
+                        match driver.open(&device_id, current_config.clone()) {
+                            Ok((mut s, _)) => {
+                                if let Err(e) = s.start().await {
+                                    let _ = res_tx
+                                        .send(Response::Error(format!("Restart failed: {}", e)));
+                                } else {
+                                    current_stream = Some(s);
+                                    let _ = res_tx.send(Response::PropertySet); // 发送成功信号
+                                }
                             }
                             Err(e) => {
-                                // 发送错误信息
-                                let _ = res_tx.send(Response::Error(e.to_string()));
+                                let _ = res_tx.send(Response::Error(format!(
+                                    "Failed to set resolution: {}",
+                                    e
+                                )));
                             }
                         }
                     }
+
                     Command::Stop => break,
                 }
             }
-            // 任务结束，自动 Stop Stream
-            let _ = stream.stop().await;
+
+            // 退出清理
+            if let Some(mut stream) = current_stream {
+                let _ = stream.stop().await;
+            }
         });
 
         Ok(Self {
             cmd_tx,
             res_rx,
-            width: 0, // 初始化为0，读取第一帧后更新
+            width: 0,
             height: 0,
             is_opened: true,
         })
     }
 
-    /// 核心 API：读取下一帧
-    ///
-    /// # 返回值
-    /// * `Ok(true)` - 读取成功
-    /// * `Ok(false)` - 流结束
-    /// * `Err(e)` - 硬件错误
     pub fn read(&mut self, mat: &mut Mat) -> Result<bool> {
         if !self.is_opened {
             return Ok(false);
         }
-
-        // 1. 发送“抓取”指令
         if self.cmd_tx.send(Command::NextFrame).is_err() {
             return Err(anyhow!("Background worker is dead"));
         }
 
-        // 2. 阻塞等待结果 (同步 API 的本质)
         let response = self
             .res_rx
             .recv()
-            .map_err(|_| anyhow!("Failed to receive response from worker"))?;
+            .map_err(|_| anyhow!("Failed to receive response"))?;
 
         match response {
             Response::FrameData {
                 width,
                 height,
                 data,
+                fourcc,
             } => {
-                // 更新内部属性
                 self.width = width as i32;
                 self.height = height as i32;
 
-                // 【Buffer Swapping / Zero-Copy 优化逻辑】
-                // 如果 mat 的尺寸和新帧完全一致，我们直接交换内部指针 (swap data)
-                // 这样避免了在主线程进行第二次内存拷贝。
-
-                // 检查用户传进来的 Mat 是否需要重新分配
-                // let required_size = data.len();
-
-                // 这里我们做了一个简单的 "Move" 操作
-                // 我们直接把从后台线程拿到的 Vec<u8> 赋值给 Mat
-                // 旧的 Mat 数据会被释放。
-                mat.data = data;
+                // 确保 Mat 大小匹配
+                let target_len = (width * height * 3) as usize;
+                if mat.data.len() != target_len {
+                    mat.data = vec![0; target_len];
+                }
                 mat.rows = height as i32;
                 mat.cols = width as i32;
-                mat.channels = 3; // 假设 BGR/RGB，具体需根据 FourCC 判断，暂简化为 3
+                mat.channels = 3;
+                mat.step = (width * 3) as usize;
 
-                // 计算 step (假设是 Packed)
-                mat.step = (mat.cols * mat.channels as i32) as usize;
-
+                let fcc = FourCC(fourcc);
+                if fcc == FourCC::YUYV {
+                    yuyv_to_bgr(&data, &mut mat.data, width as usize, height as usize);
+                } else if fcc == FourCC::MJPEG {
+                    // MJPEG decoding
+                    if let Ok(img) =
+                        image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
+                    {
+                        let rgb = img.to_rgb8();
+                        for (i, pixel) in rgb.pixels().enumerate() {
+                            // RGB -> BGR
+                            mat.data[i * 3] = pixel[2];
+                            mat.data[i * 3 + 1] = pixel[1];
+                            mat.data[i * 3 + 2] = pixel[0];
+                        }
+                    } else {
+                        return Err(anyhow!("Failed to decode MJPEG"));
+                    }
+                } else {
+                    // Assume RGB/BGR or Copy
+                    if data.len() == target_len {
+                        mat.data.copy_from_slice(&data);
+                    }
+                }
                 Ok(true)
             }
-            Response::Error(msg) => Err(anyhow!("Capture error: {}", msg)),
+            Response::Error(msg) => Err(anyhow!("{}", msg)),
             Response::EndOfStream => Ok(false),
+            _ => Err(anyhow!("Unexpected response in read")),
         }
     }
 
-    /// 检查摄像头是否打开
+    /// 【新增】设置分辨率
+    /// 这是一个同步阻塞调用，会等待后台完成硬件重启
+    pub fn set_resolution(&mut self, width: u32, height: u32) -> Result<()> {
+        if !self.is_opened {
+            return Err(anyhow!("Camera not opened"));
+        }
+
+        // 发送指令
+        self.cmd_tx
+            .send(Command::SetResolution(width, height))
+            .map_err(|_| anyhow!("Background worker is dead"))?;
+
+        // 等待确认
+        let response = self
+            .res_rx
+            .recv()
+            .map_err(|_| anyhow!("Failed to receive response"))?;
+
+        match response {
+            Response::PropertySet => Ok(()), // 成功
+            Response::Error(e) => Err(anyhow!("Failed to set resolution: {}", e)),
+            _ => Err(anyhow!("Unexpected response")),
+        }
+    }
+
+    // ... 其他 getter ...
     pub fn is_opened(&self) -> bool {
         self.is_opened
     }
-
-    /// 获取属性 (强类型)
     pub fn get_width(&self) -> i32 {
         self.width
     }
-
     pub fn get_height(&self) -> i32 {
         self.height
     }
 }
 
-// 析构函数：通知后台线程退出
 impl Drop for VideoCapture {
     fn drop(&mut self) {
-        // 尝试发送停止信号，忽略错误（因为 worker 可能已经退出了）
         let _ = self.cmd_tx.send(Command::Stop);
+    }
+}
+
+// 辅助：YUYV -> BGR (保留之前的实现)
+fn yuyv_to_bgr(src: &[u8], dest: &mut [u8], width: usize, height: usize) {
+    let frame_len = width * height * 2;
+    if src.len() < frame_len {
+        return;
+    }
+    for i in 0..(width * height / 2) {
+        let src_idx = i * 4;
+        let dst_idx = i * 6;
+        let y0 = src[src_idx] as i32;
+        let u = src[src_idx + 1] as i32 - 128;
+        let y1 = src[src_idx + 2] as i32;
+        let v = src[src_idx + 3] as i32 - 128;
+        let c0 = y0 - 16;
+        let r0 = (298 * c0 + 409 * v + 128) >> 8;
+        let g0 = (298 * c0 - 100 * u - 208 * v + 128) >> 8;
+        let b0 = (298 * c0 + 516 * u + 128) >> 8;
+        let c1 = y1 - 16;
+        let r1 = (298 * c1 + 409 * v + 128) >> 8;
+        let g1 = (298 * c1 - 100 * u - 208 * v + 128) >> 8;
+        let b1 = (298 * c1 + 516 * u + 128) >> 8;
+        dest[dst_idx] = clamp(b0);
+        dest[dst_idx + 1] = clamp(g0);
+        dest[dst_idx + 2] = clamp(r0);
+        dest[dst_idx + 3] = clamp(b1);
+        dest[dst_idx + 4] = clamp(g1);
+        dest[dst_idx + 5] = clamp(r1);
+    }
+}
+
+#[inline(always)]
+fn clamp(val: i32) -> u8 {
+    if val < 0 {
+        0
+    } else if val > 255 {
+        255
+    } else {
+        val as u8
     }
 }

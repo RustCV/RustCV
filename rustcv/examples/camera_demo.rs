@@ -1,9 +1,11 @@
 // rustcv/examples/demo.rs
 
 use anyhow::Result;
-use rustcv::highgui; // 窗口显示
-use rustcv::imgproc; // 绘图工具
-use rustcv::prelude::*; // 自动引入 VideoCapture, Mat 等
+use rustcv::{
+    highgui,    // 窗口显示
+    imgproc,    // 绘图工具
+    prelude::*, // 自动引入 VideoCapture, Mat 等
+};
 use std::time::Instant;
 
 fn main() -> Result<()> {
@@ -11,6 +13,14 @@ fn main() -> Result<()> {
     // 底层会自动启动后台线程和 Tokio Runtime
     println!("Opening camera...");
     let mut cap = VideoCapture::new(0)?;
+
+    // 这一行会触发：停止流 -> 重置参数 -> 重新打开 -> 启动流
+    println!("Setting resolution to 1280x720...");
+    if let Err(e) = cap.set_resolution(640, 480) {
+        eprintln!("Warning: Failed to set resolution: {}. Using default.", e);
+    } else {
+        println!("Resolution set successfully!");
+    }
 
     if !cap.is_opened() {
         eprintln!("Error: Could not open camera");
