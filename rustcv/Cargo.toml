@@ -1,0 +1,48 @@
+[package]
+name = "rustcv"
+version = "0.1.0"
+edition = "2021"
+description = "A high-performance, OpenCV-compatible computer vision library for Rust."
+
+[features]
+default = ["backend-auto"]
+# 自动后端选择逻辑：根据 OS 开启对应 feature
+backend-auto = ["linux-v4l2", "macos-avf", "windows-msmf"]
+linux-v4l2 = ["dep:rustcv-backend-v4l2"]
+macos-avf = ["dep:rustcv-backend-avf"]
+windows-msmf = ["dep:rustcv-backend-msmf"]
+
+[dependencies]
+# --- 核心依赖 ---
+rustcv-core = { path = "../rustcv-core" }
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+once_cell = "1.18"                        # 用于惰性初始化全局 Runtime
+crossbeam-channel = "0.5"                 # 用于同步 API 和异步 Runtime 通信
+
+# --- 异步运行时 (隐藏在幕后) ---
+tokio = { version = "1.0", features = [
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "time",
+] }
+
+# --- 图像编解码 & 绘图 (生态整合) ---
+image = "0.24"     # imread/imwrite
+imageproc = "0.23" # drawing
+rusttype = "0.9"   # 字体渲染
+
+# --- GUI (HighGUI) ---
+minifb = "0.24"
+
+# --- 后端驱动 (根据系统自动开启) ---
+[target.'cfg(target_os = "linux")'.dependencies]
+rustcv-backend-v4l2 = { path = "../rustcv-backend-v4l2", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+rustcv-backend-avf = { path = "../rustcv-backend-avf", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+rustcv-backend-msmf = { path = "../rustcv-backend-msmf", optional = true }

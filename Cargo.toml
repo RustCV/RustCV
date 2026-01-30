@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = ["rustcv",
     "rustcv-backend-avf",
     "rustcv-backend-msmf",
     "rustcv-backend-v4l2",
