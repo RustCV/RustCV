@@ -8,6 +8,9 @@ use rustcv_core::builder::CameraConfig;
 use rustcv_core::pixel_format::{FourCC, PixelFormat};
 use rustcv_core::traits::Stream;
 
+#[cfg(feature = "turbojpeg")]
+use turbojpeg::{Decompressor, Image, PixelFormat as TJPixelFormat};
+
 /// 指令：主线程 -> 后台
 enum Command {
     NextFrame,
@@ -206,19 +209,51 @@ impl VideoCapture {
                 if fcc == FourCC::YUYV {
                     yuyv_to_bgr(&data, &mut mat.data, width as usize, height as usize);
                 } else if fcc == FourCC::MJPEG {
-                    // MJPEG decoding
-                    if let Ok(img) =
-                        image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
+                    // === TurboJPEG v1.4.0 极速解码 ===
+                    #[cfg(feature = "turbojpeg")]
                     {
-                        let rgb = img.to_rgb8();
-                        for (i, pixel) in rgb.pixels().enumerate() {
-                            // RGB -> BGR
-                            mat.data[i * 3] = pixel[2];
-                            mat.data[i * 3 + 1] = pixel[1];
-                            mat.data[i * 3 + 2] = pixel[0];
+                        // 1. 创建解压器
+                        // v1.4.0 API: Decompressor::new() 返回 Result
+                        let mut decompressor = Decompressor::new()
+                            .map_err(|e| anyhow!("Failed to init TurboJPEG: {}", e))?;
+
+                        // 2. 读取头部信息 (可选，但为了保险起见，获取精确的图像尺寸)
+                        let header = decompressor
+                            .read_header(&data)
+                            .map_err(|e| anyhow!("Failed to read JPEG header: {}", e))?;
+
+                        // 3. 构建 Image 视图，直接指向 Mat 的数据
+                        // 这是一个 Zero-Copy 操作，Image 只是 Mat.data 的一个借用封装
+                        let image = Image {
+                            pixels: mat.data.as_mut_slice(), // 直接写入 Mat
+                            width: header.width,             // 图像宽度
+                            pitch: mat.step,                 // 关键：对齐步长 (Stride)
+                            height: header.height,           // 图像高度
+                            format: TJPixelFormat::BGR,      // 直接解码为 BGR，OpenCV 默认格式
+                        };
+
+                        // 4. 执行解压 (SIMD 加速)
+                        decompressor
+                            .decompress(&data, image)
+                            .map_err(|e| anyhow!("TurboJPEG decompress failed: {}", e))?;
+                    }
+
+                    #[cfg(not(feature = "turbojpeg"))]
+                    {
+                        // MJPEG decoding
+                        if let Ok(img) =
+                            image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
+                        {
+                            let rgb = img.to_rgb8();
+                            for (i, pixel) in rgb.pixels().enumerate() {
+                                // RGB -> BGR
+                                mat.data[i * 3] = pixel[2];
+                                mat.data[i * 3 + 1] = pixel[1];
+                                mat.data[i * 3 + 2] = pixel[0];
+                            }
+                        } else {
+                            return Err(anyhow!("Failed to decode MJPEG"));
                         }
-                    } else {
-                        return Err(anyhow!("Failed to decode MJPEG"));
                     }
                 } else {
                     // Assume RGB/BGR or Copy
