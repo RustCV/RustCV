@@ -8,7 +8,7 @@ simulation = []
 
 [dependencies]
 # 核心库引用
-rustcv-core = { path = "../rustcv-core" }
+rustcv-core = { version = "0.1", path = "../rustcv-core" }
 
 # 错误处理与日志
 anyhow = "1.0"

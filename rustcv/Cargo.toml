@@ -18,12 +18,12 @@ windows-msmf = ["dep:rustcv-backend-msmf"]
 
 [dependencies]
 # --- 核心依赖 ---
-rustcv-core = { path = "../rustcv-core" }
+rustcv-core = { version = "0.1", path = "../rustcv-core" }
 anyhow = "1.0"
 thiserror = "1.0"
 log = "0.4"
-once_cell = "1.18"                        # 用于惰性初始化全局 Runtime
-crossbeam-channel = "0.5"                 # 用于同步 API 和异步 Runtime 通信
+once_cell = "1.18"                                         # 用于惰性初始化全局 Runtime
+crossbeam-channel = "0.5"                                  # 用于同步 API 和异步 Runtime 通信
 
 # --- 异步运行时 (隐藏在幕后) ---
 tokio = { version = "1.0", features = [

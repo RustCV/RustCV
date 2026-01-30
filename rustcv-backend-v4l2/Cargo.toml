@@ -9,7 +9,7 @@ simulation = []
 
 [dependencies]
 # 1. 核心库 (路径依赖，假设在同一 Workspace 下)
-rustcv-core = { path = "../rustcv-core" }
+rustcv-core = { version = "0.1", path = "../rustcv-core" }
 
 # 2. V4L2 绑定
 # 我们使用 v4l crate 作为基础封装，它覆盖了大部分 ioctl
