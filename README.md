@@ -1,195 +1,185 @@
 <div align="center">
+ <img src="./assets/images/logo.png" alt="RustCV Logo" width="200" height="auto" />
 
-  <img src="RustCV-logo.png" alt="RustCV Logo" width="200" height="auto" />
+# 📷 RustCV
+### A Modern, OpenCV-compatible Computer Vision Library for Rust
 
-  # RustCV
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/your-repo/rustcv)
+[![Platform](https://img.shields.io/badge/platform-Linux-blue)](https://github.com/your-repo/rustcv)
+[![License](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-edition%202021-orange)](https://www.rust-lang.org/)
 
-  **高性能异步摄像头驱动库 | High-Performance Async Camera Library**
+**RustCV 是 OpenCV 在 Rust 时代的精神续作。**
+它提供了一个统一的门面层（Facade），让你用最熟悉的 API 风格，享受 Rust 带来的内存安全与零拷贝高性能。
 
-  <p>
-    专为机器人、嵌入式设备和 AI 视觉应用打造。<br>
-    基于 Rust <b>Async/Await</b> (Tokio) 实现真正的零拷贝与高并发视频流采集。
-  </p>
+[✨ 特性](#-key-features) • [📦 安装](#-installation) • [🚀 快速开始](#-quick-start) • [🏗️ 架构](#-architecture) • [🔧 平台支持](#-platform-support)
 
-  <a href="https://github.com/rustcv/rustcv/actions">
-    <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status">
-  </a>
-  <a href="https://crates.io/crates/rustcv">
-    <img src="https://img.shields.io/badge/crates.io-v0.1.0-orange?style=flat-square" alt="Crates.io">
-  </a>
-  <a href="https://github.com/rustcv/rustcv/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
-  </a>
-  <br>
-  <br>
 </div>
 
 ---
 
-## ✨ 核心特性 (Features)
+## 📖 简介 (Introduction)
 
-- 🦀 **Pure Rust**: 安全、内存友好，无 GC 负担。
-- ⚡ **Async First**: 基于 `Tokio`，完美契合现代异步 Rust 生态。
-- 🚀 **High Performance**: 针对 V4L2 实现了 `mmap` 零拷贝采集。
-- 🤖 **Robotics Ready**: 原生支持双目并发（Stereo Vision）与多流同步。
-- 🌐 **Web Streaming**: 内置 MJPEG 流媒体服务器，便于远程调试。
+**RustCV** 旨在解决 Rust 生态中机器视觉库碎片化的问题。它不是简单的 FFI 绑定，而是从零构建的纯 Rust 实现。
 
----
+* **对标 OpenCV**：提供 `VideoCapture`, `Mat`, `imshow` 等经典 API，极大降低迁移成本。
+* **隐藏复杂性**：底层基于 `Tokio` 异步驱动，但对外暴露**同步阻塞**接口。你不需要处理 `async/await`，就能享受异步 IO 的性能。
+* **零拷贝设计**：通过智能的 **Buffer Swapping** 技术，实现从内核驱动到用户态 `Mat` 的零拷贝数据流转。
 
-## 🖥️ 平台支持 (Platform Support)
+## ✨ 核心特性 (Key Features)
 
-RustCV 旨在提供统一的 Trait 抽象层，屏蔽底层操作系统差异。
+- 🦀 **Rust Native**: 纯 Rust 编写，无 C++ 依赖地狱。
+- ⚡ **高性能**:
+  - 内部集成 `Lazy Global Runtime`，自动管理异步驱动。
+  - 支持 `Stride` 内存布局，直接映射硬件缓冲区。
+- 🎨 **开箱即用**:
+  - **VideoIO**: 支持 V4L2 (Linux) 和 AVFoundation (macOS, WIP)。
+  - **HighGUI**: 基于 `minifb` 的轻量级跨平台窗口显示。
+  - **ImgProc**: 内置绘图原语（画框、写字）和 FPS 计算。
+  - **ImgCodecs**: 集成 `image-rs`，支持主流格式读写。
+- 🛠️ **强类型配置**: 拒绝魔法数字，提供 `cap.set_resolution(1280, 720)` 等强类型 API。
 
-| 平台 (Platform) | 后端 (Backend) | 状态 (Status) | 说明 (Note) |
-| :--- | :--- | :---: | :--- |
-| **Linux** (Ubuntu/Debian) | `v4l2` | ✅ **Stable** | 完整支持 (采集/控制/并发/推流) |
-| **macOS** | `avfoundation` | 🚧 **WIP** | 正在开发中 (Objc2 binding) |
-| **Windows** | `media_foundation`| 📅 **Planned** | 计划中 |
+## 📦 安装 (Installation)
 
----
-
-## 🐧 Linux (Ubuntu) 使用指南
-
-目前 Linux 后端基于 **V4L2** 深度优化，适用于 **树莓派**、**香橙派**、**Jetson** 及标准 PC。
-
-### 1. 环境准备 (Prerequisites)
-
-安装构建工具和 V4L 调试工具：
-
-```bash
-sudo apt update
-sudo apt install build-essential llvm-dev libclang-dev clang libv4l-dev v4l-utils pkg-config libxkbcommon-dev libwayland-dev libx11-dev
-
-# 权限设置：将当前用户加入 video 组 (需注销或重启生效)
-sudo usermod -aG video $USER
-```
-
-### 2. 快速接入 (Quick Start)
-
-在 `Cargo.toml` 中添加依赖：
+在你的 `Cargo.toml` 中添加依赖：
 
 ```toml
 [dependencies]
-rustcv-core = "0.1"
-rustcv-backend-v4l2 = "0.1"
-tokio = { version = "1.0", features = ["full"] }
-anyhow = "1.0"
+# 推荐：启用自动后端选择
+rustcv = { version= "0.1" }
+
+# 或者手动指定
+# rustcv = { version= "0.1", features = ["linux-v4l2"] }
 ```
 
-**最小代码示例 (`main.rs`)：**
+## 🚀 快速开始 (Quick Start)
+
+这是最激动人心的部分。看看代码是多么简洁：
 
 ```rust
-use rustcv_core::traits::{Driver, Stream};
-use rustcv_backend_v4l2::V4l2Driver;
-use rustcv_core::builder::{CameraConfig, Priority};
+use anyhow::Result;
+use rustcv::prelude::*; // 引入 VideoCapture, Mat
+use rustcv::highgui;    // 引入 GUI
+use rustcv::imgproc;    // 引入 绘图
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // 1. 初始化驱动并列出设备
-    let driver = V4l2Driver::new();
-    let devices = driver.list_devices()?;
-    
-    if devices.is_empty() {
-        println!("未检测到摄像头设备");
-        return Ok(());
+fn main() -> Result<()> {
+    // 1. 打开摄像头 (索引 0)
+    // 底层自动启动异步 Runtime，无需 #[tokio::main]
+    let mut cap = VideoCapture::new(0)?;
+
+    // 2. (可选) 设置高清分辨率 - 支持热重载！
+    // 这一步会自动重启底层流，用户无感
+    cap.set_resolution(640, 480)?;
+
+    let mut frame = Mat::empty();
+
+    println!("🎥 Start capturing... Press ESC to exit.");
+
+    // 3. 经典循环
+    while cap.read(&mut frame)? {
+        if frame.is_empty() { continue; }
+
+        // --- 图像处理 ---
+        // 在左上角绘制 FPS 和分辨率
+        imgproc::put_text(
+            &mut frame,
+            &format!("Res: {}x{}", frame.cols, frame.rows),
+            imgproc::Point::new(10, 30),
+            1.0,
+            imgproc::Scalar::new(0, 0, 255) // Red
+        );
+
+        // 画一个绿色的框
+        imgproc::rectangle(
+            &mut frame,
+            imgproc::Rect::new(200, 200, 300, 300),
+            imgproc::Scalar::new(0, 255, 0), // Green
+            2
+        );
+
+        // --- 显示 ---
+        highgui::imshow("RustCV Demo", &frame)?;
+
+        // --- 按键 ---
+        if highgui::wait_key(1)? == 27 { // ESC
+            break;
+        }
     }
 
-    // 2. 配置参数 (640x480 @ 30FPS)
-    let config = CameraConfig::new()
-        .resolution(640, 480, Priority::Required)
-        .fps(30, Priority::High);
-
-    // 3. 打开第一个设备
-    let (mut stream, _controls) = driver.open(&devices[0].id, config)?;
-
-    // 4. 启动采集循环
-    stream.start().await?;
-    println!("摄像头启动成功: {}", devices[0].name);
-    
-    // 5. 获取一帧数据
-    if let Ok(frame) = stream.next_frame().await {
-        println!("采集帧: {}x{} | 大小: {} bytes", frame.width, frame.height, frame.data.len());
-    }
-    
     Ok(())
 }
 ```
 
----
+运行示例：
 
-## 📦 示例大全 (Examples)
+```bash
+cargo run -p rustcv --example demo
+```
 
-本项目包含多个开箱即用的示例，覆盖了从基础显示到网络推流的场景。
+![RustCV Demo](/assets/images/demo.png)
 
-| 示例名称 | 命令 | 描述 |
-| --- | --- | --- |
-| **📸 基础预览** | `cargo run -p rustcv-backend-v4l2 --example camera_view` | 查看单摄画面、帧率和时间戳 |
-| **👯 双目并发** | `cargo run -p rustcv-backend-v4l2 --example dual_camera_view` | **机器人核心功能**。同时采集并显示双路摄像头数据 |
-| **🌐 Web 预览** | `cargo run -p rustcv-backend-v4l2 --example web_streaming` | 启动 Web 服务器，通过浏览器低延迟查看画面 |
-| **🚀 双路推流** | `cargo run -p rustcv-backend-v4l2 --example dual_web_streaming` | 同时将两个摄像头画面推流至 Web (左右分屏) |
+## 🏗️ 架构 (Architecture)
 
-> **提示**：运行 Web 示例后，请访问 `http://localhost:3000`
-
----
-
-## 🛠️ 架构设计 (Architecture)
+RustCV 采用**门面模式 (Facade Pattern)** 设计，底层模块化，上层统一化。
 
 ```mermaid
 graph TD
-    UserApp[用户应用 User App] --> Core[RustCV Core Traits]
-    Core --> V4L2[Backend: Linux V4L2]
-    Core --> AVF[Backend: macOS AVFoundation]
-    Core --> MF[Backend: Win MediaFoundation]
+    User[User Application] --> RustCV[Crate: rustcv]
 
-    subgraph "Async Runtime"
-    V4L2 -.-> Tokio[Tokio Epoll]
+    subgraph "RustCV Facade"
+        API[Unified API]
+        RT[Implicit Tokio Runtime]
+        Mat[Mat (Owned/Strided)]
     end
+
+    RustCV --> API
+    API <--> RT
+
+    subgraph "Core Layer"
+        Core[rustcv-core]
+        Traits[Traits: Driver, Stream]
+    end
+
+    RT --> Core
+
+    subgraph "Backends (Auto Selected)"
+        V4L2[rustcv-backend-v4l2]
+        AVF[rustcv-backend-avf]
+    end
+
+    Core --> V4L2
+    Core --> AVF
+
+    style User fill:#f9f,stroke:#333,stroke-width:2px
+    style RustCV fill:#bbf,stroke:#333,stroke-width:2px
 ```
 
-* **rustcv-core**: 定义标准接口 (`Driver`, `Stream`) 和数据结构。
-* **rustcv-backend-v4l2**: Linux 实现。使用 `epoll` 实现异步 IO，配合 `mmap` 实现零拷贝。
-* **rustcv-backend-avf**: macOS 实现 (WIP)。
+## 🔧 平台支持 (Platform Support)
 
----
+目前项目处于快速迭代期，平台支持情况如下：
 
-## 🗺️ 路线图 (Roadmap)
+| 平台        | 后端技术        | 状态         | 备注                                 |
+| :---------- | :-------------- | :----------- | :----------------------------------- |
+| **Linux**   | **V4L2**        | ✅ **Stable** | 支持 MJPEG/YUYV 解码，支持热重载     |
+| **macOS**   | AVFoundation    | 🚧 *Beta*     | 基础代码已就绪，正在完善 Buffer 映射 |
+| **Windows** | MediaFoundation | 📅 *Planned*  | 计划中                               |
 
-* [x] **Core**: 基础 Trait 定义与配置构建器
-* [x] **Linux**: V4L2 异步驱动实现 (Epoll/Mmap)
-* [x] **Linux**: 多摄并发支持 (Dual Camera)
-* [x] **Linux**: MJPEG Web 推流服务器
-* [ ] **macOS**: AVFoundation 后端实现 (Dev in progress...)
-* [ ] **Windows**: Media Foundation 后端实现
-* [ ] **Tools**: 统一的跨平台 CLI 调试工具
+## 🤝 贡献 (Contributing)
 
----
+我们欢迎任何形式的贡献！无论是提交 Issue，还是为特定 OS 添加 Backend 实现。
 
-## ❓ 常见问题 (FAQ)
+1.  Fork 本仓库
+2.  创建你的 Feature 分支 (`git checkout -b feature/AmazingFeature`)
+3.  提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4.  推送到分支 (`git push origin feature/AmazingFeature`)
+5.  提交 Pull Request
 
-<details>
-<summary><b>Permission denied (os error 13) 怎么办？</b></summary>
+## 📄 许可证 (License)
 
-这是因为当前用户没有访问 `/dev/video*` 的权限。请执行以下命令将用户加入 video 组，并**重启系统**或注销重登：
-
-```bash
-sudo usermod -aG video $USER
-```
-
-</details>
-
-<details>
-<summary><b>Web 流画面卡顿？</b></summary>
-
-JPEG 编码是 CPU 密集型操作。在 Debug 模式下 Rust 运行较慢，请尝试使用 Release 模式运行：
-
-```bash
-cargo run --release -p rustcv-backend-v4l2 --example web_streaming
-```
-
-</details>
+Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
 <div align="center">
-<sub>Built with ❤️ by the RustCV Team</sub>
+    Build with ❤️ in Rust
 </div>
