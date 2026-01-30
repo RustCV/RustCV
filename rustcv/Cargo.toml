@@ -43,10 +43,10 @@ minifb = "0.24"
 
 # --- 后端驱动 (根据系统自动开启) ---
 [target.'cfg(target_os = "linux")'.dependencies]
-rustcv-backend-v4l2 = { path = "../rustcv-backend-v4l2", optional = true }
+rustcv-backend-v4l2 = { version = "0.1", path = "../rustcv-backend-v4l2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-rustcv-backend-avf = { path = "../rustcv-backend-avf", optional = true }
+rustcv-backend-avf = { version = "0.1", path = "../rustcv-backend-avf", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-rustcv-backend-msmf = { path = "../rustcv-backend-msmf", optional = true }
+rustcv-backend-msmf = { version = "0.1", path = "../rustcv-backend-msmf", optional = true }
