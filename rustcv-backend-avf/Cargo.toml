@@ -1,7 +1,12 @@
 [package]
 name = "rustcv-backend-avf"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["Leon <echo_ai@foxmail.com>"]
+license = "MIT"
+repository = "https://github.com/rustcv/rustcv"
+keywords = ["camera", "video", "driver", "robotics", "computer-vision"]
+categories = ["hardware-support", "multimedia::video", "science::robotics"]
 
 [features]
 simulation = []
