@@ -1,6 +1,6 @@
 [package]
 name = "rustcv"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Leon <echo_ai@foxmail.com>"]
 description = "A high-performance computer vision library for Rust."
