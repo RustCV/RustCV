@@ -2,7 +2,11 @@
 name = "rustcv"
 version = "0.1.0"
 edition = "2021"
-description = "A high-performance, OpenCV-compatible computer vision library for Rust."
+authors = ["Leon <echo_ai@foxmail.com>"]
+description = "A high-performance computer vision library for Rust."
+license = "MIT"
+repository = "https://github.com/RustCV/RustCV"
+keywords = ["RustCV", "Version"]
 
 [features]
 default = ["backend-auto"]
