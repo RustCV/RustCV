@@ -12,7 +12,7 @@
 **RustCV 是 OpenCV 在 Rust 时代的精神续作。**
 它提供了一个统一的门面层（Facade），让你用最熟悉的 API 风格，享受 Rust 带来的内存安全与零拷贝高性能。
 
-[✨ 特性](#-key-features) • [📦 安装](#-installation) • [🚀 快速开始](#-quick-start) • [🏗️ 架构](#-architecture) • [🔧 平台支持](#-platform-support)
+[✨ 特性](#-核心特性-key-features) • [📦 安装](#-安装-installation) • [🚀 快速开始](#-快速开始-quick-start) • [🏗️ 架构](#%EF%B8%8F-架构-architecture) • [🔧 平台支持](#-平台支持-platform-support) • [🤝 贡献](#-贡献-contributing)
 
 </div>
 
@@ -129,7 +129,7 @@ graph TD
     subgraph "RustCV Facade"
         API[Unified API]
         RT[Implicit Tokio Runtime]
-        Mat[Mat (Owned/Strided)]
+        Mat[Mat Owned/Strided]
     end
 
     RustCV --> API
