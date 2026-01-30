@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     let mut cap = VideoCapture::new(0)?;
 
     // 这一行会触发：停止流 -> 重置参数 -> 重新打开 -> 启动流
-    println!("Setting resolution to 1280x720...");
+    println!("Setting resolution to 640x480...");
     if let Err(e) = cap.set_resolution(640, 480) {
         eprintln!("Warning: Failed to set resolution: {}. Using default.", e);
     } else {
