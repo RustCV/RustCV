@@ -46,7 +46,7 @@
 ```toml
 [dependencies]
 # 推荐：启用自动后端选择
-rustcv = { version= "0.1" }
+rustcv = { version= "0.1", features = ["backend-auto"] }
 
 # 或者手动指定
 # rustcv = { version= "0.1", features = ["linux-v4l2"] }

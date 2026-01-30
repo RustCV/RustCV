@@ -9,7 +9,7 @@ repository = "https://github.com/RustCV/RustCV"
 keywords = ["RustCV", "Version"]
 
 [features]
-default = ["backend-auto"]
+# default = ["backend-auto"]
 # 自动后端选择逻辑：根据 OS 开启对应 feature
 backend-auto = ["linux-v4l2", "macos-avf", "windows-msmf"]
 linux-v4l2 = ["dep:rustcv-backend-v4l2"]
