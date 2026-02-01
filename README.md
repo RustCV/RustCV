@@ -10,8 +10,6 @@
 [![License](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-edition%202021-orange)](https://www.rust-lang.org/)
 
-**RustCV** is a high-performance, native Rust computer vision library designed to be a modern alternative to OpenCV. By leveraging Rust's memory safety and zero-cost abstractions, we provide a seamless, "C++-dependency-free" experience for vision developers and robotics engineers.
-
 </div>
 
 # RustCV 🦀
