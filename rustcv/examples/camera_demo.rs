@@ -12,7 +12,7 @@ fn main() -> Result<()> {
     // 1. 打开摄像头 (索引 0)
     // 底层会自动启动后台线程和 Tokio Runtime
     println!("Opening camera...");
-    let mut cap = VideoCapture::new(0)?;
+    let mut cap = VideoCapture::new(4)?;
 
     // 这一行会触发：停止流 -> 重置参数 -> 重新打开 -> 启动流
     println!("Setting resolution to 640x480...");
@@ -30,6 +30,8 @@ fn main() -> Result<()> {
     // 2. 预分配 Mat (为了 Buffer Swapping 优化)
     // 实际上首次 read 会自动处理大小，这里创建一个空的即可
     let mut frame = Mat::empty();
+
+    let mut high_res_mode = false;
 
     // FPS 计算器
     let mut last_time = Instant::now();
@@ -84,6 +86,25 @@ fn main() -> Result<()> {
             // ESC or 'q'
             println!("Exiting...");
             break;
+        }
+
+        // 热重载演示(按下空格键，改变分辨率)
+        if key == 32 {
+            high_res_mode = !high_res_mode;
+
+            let (w, h) = if high_res_mode {
+                (1280, 720)
+            } else {
+                (640, 480)
+            };
+
+            println!("🔄 Hot Reloading to {}x{}...", w, h);
+
+            if let Err(e) = cap.set_resolution(w, h) {
+                println!("❌ Failed to reload: {}", e);
+            } else {
+                println!("✅ Reload success!");
+            }
         }
     }
 

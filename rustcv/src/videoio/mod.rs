@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use rustcv_core::builder::CameraConfig;
 use rustcv_core::pixel_format::{FourCC, PixelFormat};
-use rustcv_core::traits::Stream;
+use rustcv_core::traits::{Driver, Stream};
 
 #[cfg(feature = "turbojpeg")]
 use turbojpeg::{Decompressor, Image, PixelFormat as TJPixelFormat};
@@ -46,14 +46,7 @@ impl VideoCapture {
         let driver = backend::create_driver()?;
 
         // 2. 查找设备 ID
-        let devices = driver
-            .list_devices()
-            .map_err(|e| anyhow!("Failed to list devices: {}", e))?;
-        let device_id = devices
-            .get(index as usize)
-            .ok_or_else(|| anyhow!("Camera index {} out of range", index))?
-            .id
-            .clone();
+        let device_id = Self::resolve_device_id(&*driver, index)?;
 
         // 3. 创建通道
         let (cmd_tx, cmd_rx) = bounded::<Command>(1);
@@ -303,6 +296,38 @@ impl VideoCapture {
     }
     pub fn get_height(&self) -> i32 {
         self.height
+    }
+
+    // 内部辅助：解决设备 ID 的平台差异
+    fn resolve_device_id(driver: &dyn Driver, index: u32) -> Result<String> {
+        #[cfg(target_os = "linux")]
+        {
+            // Linux 策略：直接映射 ID，模仿 OpenCV
+            // index 0 -> "/dev/video0"
+            // index 1 -> "/dev/video1"
+            Ok(format!("/dev/video{}", index))
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            // macOS/Windows 策略：列表排序后取索引
+            let mut devices = driver
+                .list_devices()
+                .map_err(|e| anyhow!("Failed to list devices: {}", e))?;
+
+            // 关键：必须排序，确保 new(0) 永远打开同一个设备
+            devices.sort_by(|a, b| a.id.cmp(&b.id));
+
+            let info = devices.get(index as usize).ok_or_else(|| {
+                anyhow!(
+                    "Camera index {} out of range. Found {} devices.",
+                    index,
+                    devices.len()
+                )
+            })?;
+
+            Ok(info.id.clone())
+        }
     }
 }
 

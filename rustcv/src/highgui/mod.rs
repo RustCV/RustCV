@@ -22,29 +22,40 @@ static WINDOW_MANAGER: Lazy<Mutex<HashMap<String, SendWindow>>> =
 
 /// 在指定窗口中显示图像
 pub fn imshow(winname: &str, mat: &Mat) -> Result<()> {
-    // 1. 格式转换 (BGR u8 -> ARGB u32)
+    // 1. 格式转换
     let buffer = mat_to_u32_buffer(mat)?;
+    let width = mat.cols as usize;
+    let height = mat.rows as usize;
 
     // 2. 获取全局锁
     let mut manager = WINDOW_MANAGER
         .lock()
         .map_err(|_| anyhow!("Failed to lock window manager"))?;
 
-    // 3. 查找或创建窗口
-    if let Some(wrapper) = manager.get_mut(winname) {
-        // 更新现有窗口 (通过 wrapper.0 访问内部 Window)
-        wrapper
-            .0
-            .update_with_buffer(&buffer, mat.cols as usize, mat.rows as usize)
-            .map_err(|e| anyhow!("Window update failed: {}", e))?;
+    // 3. 检查是否需要重建窗口
+    let need_recreate = if let Some(wrapper) = manager.get(winname) {
+        // 获取当前窗口的尺寸
+        let (win_w, win_h) = wrapper.0.get_size();
+        // 如果尺寸不匹配（说明分辨率变了），标记为需要重建
+        // 注意：这里容忍一点点误差，或者严格匹配
+        win_w != width || win_h != height
     } else {
+        true // 窗口不存在，肯定要创建
+    };
+
+    if need_recreate {
+        // 如果存在旧窗口，先移除（Drop 会自动关闭窗口）
+        if manager.contains_key(winname) {
+            manager.remove(winname);
+        }
+
         // 创建新窗口
         let mut window = Window::new(
             winname,
-            mat.cols as usize,
-            mat.rows as usize,
+            width,
+            height,
             WindowOptions {
-                resize: true,
+                resize: true, // 允许用户手动缩放
                 ..WindowOptions::default()
             },
         )
@@ -52,11 +63,19 @@ pub fn imshow(winname: &str, mat: &Mat) -> Result<()> {
 
         // 初始更新
         window
-            .update_with_buffer(&buffer, mat.cols as usize, mat.rows as usize)
-            .map_err(|e| anyhow!("Initial window update failed: {}", e))?;
+            .update_with_buffer(&buffer, width, height)
+            .map_err(|e| anyhow!("Initial update failed: {}", e))?;
 
-        // 存入包装器
+        // 存入管理器
         manager.insert(winname.to_string(), SendWindow(window));
+    } else {
+        // 窗口已存在且尺寸匹配，直接更新
+        if let Some(wrapper) = manager.get_mut(winname) {
+            wrapper
+                .0
+                .update_with_buffer(&buffer, width, height)
+                .map_err(|e| anyhow!("Window update failed: {}", e))?;
+        }
     }
 
     Ok(())
