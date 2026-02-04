@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
-use rustcv_core::builder::CameraConfig;
-use rustcv_core::traits::{Driver, Stream};
+use rustcv_core::traits::Driver;
 
 /// 后端枚举，用于内部标记当前使用的是哪个驱动
 #[derive(Debug, Clone, Copy)]
