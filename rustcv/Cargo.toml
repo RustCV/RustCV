@@ -1,6 +1,6 @@
 [package]
 name = "rustcv"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Leon <echo_ai@foxmail.com>"]
 description = "A high-performance computer vision library for Rust."
@@ -9,6 +9,7 @@ repository = "https://github.com/RustCV/RustCV"
 keywords = ["RustCV", "Version"]
 # 排除本地测试用的 assets 或脚本，减小包体积
 exclude = ["assets/*", ".github/*"]
+readme = "../README.md"
 
 [features]
 default = ["backend-auto"]

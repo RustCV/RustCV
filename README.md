@@ -3,10 +3,10 @@
 
 # 📷 RustCV
 
-[简体中文](README_zh.md) | English
+English | [简体中文](README_zh.md)
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/your-repo/rustcv)
-[![Platform](https://img.shields.io/badge/platform-Linux-blue)](https://github.com/your-repo/rustcv)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/rustcv/rustcv)
+[![Platform](https://img.shields.io/badge/platform-Linux-blue)](https://github.com/rustcv/rustcv)
 [![License](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-edition%202021-orange)](https://www.rust-lang.org/)
 
@@ -33,9 +33,20 @@
 - **VideoIO**: Native support for **V4L2 (Linux)**; AVFoundation (macOS) is currently WIP.
 - **HighGUI**: Lightweight, cross-platform windowing based on `minifb` for real-time debugging.
 - **ImgProc**: Built-in drawing primitives (rectangles, text) and real-time FPS calculation.
-- **ImgCodecs**: Integrated with `image-rs` for reading/writing all major image formats.
+- **ImgCodecs**: Integrated with `image` for reading/writing all major image formats.
 
 - **🛠️ Strong-Typed Configuration**: No more "magic numbers." Use ergonomic APIs like `cap.set_resolution(1280, 720)`.
+
+## 🖥️ Platform Support
+
+The project is currently in a rapid iteration phase, and platform support is as follows:
+
+| Platform    | Backend Technology | Status                     | Development Plan                                                                 |
+| :---------- | :----------------- | :------------------------- | :------------------------------------------------------------------------------- |
+| **Linux**   | **V4L2**           | 🚀 Initial support, some core functions implemented | Full-scale development to complete full functionality adaptation and deployment. Currently supports MJPEG/YUYV decoding and hot reloading. |
+| **macOS**   | AVFoundation       | 🚧 Under development, core function adaptation in progress | Continuous development to complete full functionality support and compatibility verification. |
+| **Windows** | MediaFoundation    | 📋 Development not yet started, no available functions | Included in the development plan, adaptation will begin after the core functions of the preceding platforms are stable. |
+
 
 ## 📦 Quick Start
 
@@ -89,7 +100,7 @@ fn main() -> Result<()> { (V4L2 on Linux)
         );
 
         // Display window
-        highgui::imshow("RustCV Demo", &frame)?;
+        highgui::imshow("RustCV Camera", &frame)?;
 
         // Input Handling
         if highgui::wait_key(1)? == 27 { // ESC
@@ -104,10 +115,10 @@ fn main() -> Result<()> { (V4L2 on Linux)
 Run
 
 ```bash
-cargo run -p rustcv --example demo
+cargo run
 ```
 
-![RustCV Demo](/assets/images/demo.png)
+![RustCV Camera](./assets/images/demo.png)
 
 ## 🤝 Contributing
 

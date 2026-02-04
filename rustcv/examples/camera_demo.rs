@@ -1,5 +1,3 @@
-// rustcv/examples/demo.rs
-
 use anyhow::Result;
 use rustcv::{
     highgui,    // 窗口显示

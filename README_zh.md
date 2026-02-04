@@ -7,15 +7,13 @@
 
 ### RustCV：用现代 Rust 重新定义的 OpenCV 兼容视觉处理框架
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/your-repo/rustcv)
-[![Platform](https://img.shields.io/badge/platform-Linux-blue)](https://github.com/your-repo/rustcv)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/rustcv/rustcv)
+[![Platform](https://img.shields.io/badge/platform-Linux-blue)](https://github.com/rustcv/rustcv)
 [![License](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-edition%202021-orange)](https://www.rust-lang.org/)
 
 **RustCV 是 OpenCV 在 Rust 时代的精神续作。**
 它提供了一个统一的门面层（Facade），让你用最熟悉的 API 风格，享受 Rust 带来的内存安全与零拷贝高性能。
-
-[✨ 特性](#-核心特性-key-features) • [📦 安装](#-安装-installation) • [🚀 快速开始](#-快速开始-quick-start) • [🏗️ 架构](#%EF%B8%8F-架构-architecture) • [🔧 平台支持](#-平台支持-platform-support) • [🤝 贡献](#-贡献-contributing)
 
 </div>
 
@@ -41,6 +39,17 @@
   - **ImgProc**: 内置绘图原语（画框、写字）和 FPS 计算。
   - **ImgCodecs**: 集成 `image-rs`，支持主流格式读写。
 - 🛠️ **强类型配置**: 拒绝魔法数字，提供 `cap.set_resolution(1280, 720)` 等强类型 API。
+
+## 🖥️ 平台支持 (Platform Support)
+
+目前项目处于快速迭代期，平台支持情况如下：
+
+| 平台        | 后端技术        | 状态         | 开发规划                                 |
+| :---------- | :-------------- | :----------- | :----------------------------------- |
+| **Linux**   | **V4L2**        | 🚀 初步支持，已实现部分核心功能 | 全力开发，完成全功能适配与落地。目前已支持 MJPEG/YUYV 解码，支持热重载 |
+| **macOS**   | AVFoundation    | 🚧 开发中，正推进核心功能适配 | 持续开发，完成全功能支持与兼容性验证 |
+| **Windows** | MediaFoundation | 📋 暂未启动开发，无可用功能 | 已纳入开发计划，待前序平台核心功能稳定后启动适配 |
+
 
 ## 📦 安装 (Installation)
 
@@ -99,7 +108,7 @@ fn main() -> Result<()> {
         );
 
         // --- 显示 ---
-        highgui::imshow("RustCV Demo", &frame)?;
+        highgui::imshow("RustCV Camera", &frame)?;
 
         // --- 按键 ---
         if highgui::wait_key(1)? == 27 { // ESC
@@ -114,10 +123,10 @@ fn main() -> Result<()> {
 运行示例：
 
 ```bash
-cargo run -p rustcv --example demo
+cargo run
 ```
 
-![RustCV Demo](/assets/images/demo.png)
+![RustCV Camera](./assets/images/demo.png)
 
 ## 🏗️ 架构 (Architecture)
 
@@ -154,16 +163,6 @@ graph TD
     style User fill:#f9f,stroke:#333,stroke-width:2px
     style RustCV fill:#bbf,stroke:#333,stroke-width:2px
 ```
-
-## 🔧 平台支持 (Platform Support)
-
-目前项目处于快速迭代期，平台支持情况如下：
-
-| 平台        | 后端技术        | 状态          | 备注                                 |
-| :---------- | :-------------- | :------------ | :----------------------------------- |
-| **Linux**   | **V4L2**        | ✅ **Stable** | 支持 MJPEG/YUYV 解码，支持热重载     |
-| **macOS**   | AVFoundation    | 🚧 _Beta_     | 基础代码已就绪，正在完善 Buffer 映射 |
-| **Windows** | MediaFoundation | 📅 _Planned_  | 计划中                               |
 
 ## 🤝 贡献 (Contributing)
 
