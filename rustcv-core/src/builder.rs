@@ -40,20 +40,20 @@ impl CameraConfig {
         self
     }
 
-    /// 【补全】添加帧率要求
+    /// 添加帧率要求
     pub fn fps(mut self, fps: u32, p: Priority) -> Self {
         self.fps_req = Some((fps, p));
         self
     }
 
-    /// 【补全】添加像素格式要求
+    /// 添加像素格式要求
     /// 支持传入 PixelFormat 或 FourCC (会自动转换)
     pub fn format<T: Into<PixelFormat>>(mut self, fmt: T, p: Priority) -> Self {
         self.format_req.push((fmt.into(), p));
         self
     }
 
-    /// 【补全】设置缓冲区数量 (默认 3)
+    /// 设置缓冲区数量 (默认 3)
     pub fn buffer_count(mut self, count: usize) -> Self {
         self.buffer_count = count;
         self

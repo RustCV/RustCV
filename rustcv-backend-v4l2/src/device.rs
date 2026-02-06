@@ -55,15 +55,14 @@ pub fn open(id: &str, config: CameraConfig) -> Result<(Box<dyn Stream>, DeviceCo
     fmt.fourcc =
         pixel_map::to_v4l_fourcc(negotiated_fmt.format).ok_or(CameraError::FormatNotSupported)?;
     // 注意：FPS 设置通常需要 VIDIOC_S_PARM，这里简化处理，稍后在 Stream 初始化中设置
-
     let applied_fmt = dev.set_format(&fmt).map_err(CameraError::Io)?;
 
-    tracing::info!(
-        "Camera opened: {}x{} @ {}",
-        applied_fmt.width,
-        applied_fmt.height,
-        applied_fmt.fourcc
-    );
+    // tracing::info!(
+    //     "Camera opened: {}x{} @ {}",
+    //     applied_fmt.width,
+    //     applied_fmt.height,
+    //     applied_fmt.fourcc
+    // );
 
     // 4. 创建共享句柄 (Arc)
     // Stream 和 Controls 都需要访问同一个 fd，但在 V4L2 中多线程访问同一个 fd 是安全的

@@ -1,16 +1,23 @@
 #[cfg(target_os = "linux")]
+use anyhow::{Context, Result};
+#[cfg(target_os = "linux")]
+use minifb::{Key, Window, WindowOptions};
+#[cfg(target_os = "linux")]
+use rustcv_backend_v4l2::V4l2Driver;
+#[cfg(target_os = "linux")]
+use rustcv_core::builder::{CameraConfig, Priority};
+#[cfg(target_os = "linux")]
+use rustcv_core::pixel_format::FourCC;
+#[cfg(target_os = "linux")]
+use rustcv_core::traits::Driver;
+#[cfg(target_os = "linux")]
+use std::time::{Duration, Instant};
+#[cfg(target_os = "linux")]
+use v4l::video::Capture;
+
+#[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<()> {
-    use anyhow::{Context, Result};
-    use minifb::{Key, Window, WindowOptions};
-    use std::time::{Duration, Instant};
-
-    use rustcv_backend_v4l2::V4l2Driver;
-    use rustcv_core::builder::{CameraConfig, Priority};
-    use rustcv_core::pixel_format::FourCC;
-    use rustcv_core::traits::Driver;
-
-    use v4l::video::Capture;
     // 1. 初始化日志，以便看到我们之前埋下的 tracing::info!
     tracing_subscriber::fmt::init();
 
@@ -243,7 +250,6 @@ fn dump_capabilities(dev_path: &str) -> anyhow::Result<()> {
     println!("----------------------------------------\n");
     Ok(())
 }
-
 
 #[cfg(not(target_os = "linux"))]
 fn main() {

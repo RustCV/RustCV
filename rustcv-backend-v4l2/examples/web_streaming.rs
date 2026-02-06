@@ -1,3 +1,30 @@
+#[cfg(target_os = "linux")]
+use anyhow::{Context, Result};
+#[cfg(target_os = "linux")]
+use axum::{
+    body::Body,
+    extract::State,
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
+#[cfg(target_os = "linux")]
+use bytes::Bytes;
+#[cfg(target_os = "linux")]
+use futures::StreamExt;
+#[cfg(target_os = "linux")]
+use std::{net::SocketAddr, time::Duration};
+#[cfg(target_os = "linux")]
+use tokio::sync::broadcast;
+
+#[cfg(target_os = "linux")]
+use rustcv_backend_v4l2::V4l2Driver;
+#[cfg(target_os = "linux")]
+use rustcv_core::builder::{CameraConfig, Priority};
+#[cfg(target_os = "linux")]
+use rustcv_core::pixel_format::FourCC;
+#[cfg(target_os = "linux")]
+use rustcv_core::traits::{Driver, Stream};
 
 #[cfg(target_os = "linux")]
 // 图像参数
@@ -17,24 +44,6 @@ struct AppState {
 #[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<()> {
-    use anyhow::{Context, Result};
-    use axum::{
-        body::Body,
-        extract::State,
-        response::{IntoResponse, Response},
-        routing::get,
-        Router,
-    };
-    use bytes::Bytes;
-    use futures::StreamExt;
-    use std::{net::SocketAddr, time::Duration};
-    use tokio::sync::broadcast;
-
-    use rustcv_backend_v4l2::V4l2Driver;
-    use rustcv_core::builder::{CameraConfig, Priority};
-    use rustcv_core::pixel_format::FourCC;
-    use rustcv_core::traits::{Driver, Stream};
-
     tracing_subscriber::fmt::init();
     println!("=== RustCV Web Streaming Demo ===");
 

@@ -1,4 +1,21 @@
 #[cfg(target_os = "linux")]
+use anyhow::{Context, Result};
+#[cfg(target_os = "linux")]
+use minifb::{Key, Window, WindowOptions};
+#[cfg(target_os = "linux")]
+use rustcv_backend_v4l2::V4l2Driver;
+#[cfg(target_os = "linux")]
+use rustcv_core::builder::{CameraConfig, Priority};
+#[cfg(target_os = "linux")]
+use rustcv_core::pixel_format::FourCC;
+#[cfg(target_os = "linux")]
+use rustcv_core::traits::{Driver, Stream};
+#[cfg(target_os = "linux")]
+use std::sync::{Arc, Mutex};
+#[cfg(target_os = "linux")]
+use std::time::Duration;
+
+#[cfg(target_os = "linux")]
 const WIDTH: usize = 640;
 #[cfg(target_os = "linux")]
 const HEIGHT: usize = 480;
@@ -16,16 +33,6 @@ struct SharedBuffer {
 #[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<()> {
-    use anyhow::{Context, Result};
-    use minifb::{Key, Window, WindowOptions};
-    use std::sync::{Arc, Mutex};
-    use std::time::Duration;
-
-    use rustcv_backend_v4l2::V4l2Driver;
-    use rustcv_core::builder::{CameraConfig, Priority};
-    use rustcv_core::pixel_format::FourCC;
-    use rustcv_core::traits::{Driver, Stream};
-
     // 定义画面尺寸
 
     tracing_subscriber::fmt::init();
