@@ -10,3 +10,5 @@ keywords = ["camera", "video", "driver", "robotics", "computer-vision"]
 categories = ["hardware-support", "multimedia::video", "science::robotics"]
 
 [dependencies]
+
+[target.'cfg(target_os = "windows")'.dependencies]

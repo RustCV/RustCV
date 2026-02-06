@@ -13,6 +13,8 @@ categories = ["hardware-support", "multimedia::video", "science::robotics"]
 simulation = []
 
 [dependencies]
+
+[target.'cfg(target_os = "linux")'.dependencies]
 # 1. 核心库 (路径依赖，假设在同一 Workspace 下)
 rustcv-core = { version = "0.1", path = "../rustcv-core" }
 

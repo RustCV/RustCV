@@ -1,25 +1,11 @@
-use anyhow::{Context, Result};
-use axum::{
-    body::Body,
-    extract::State,
-    response::{IntoResponse, Response},
-    routing::get,
-    Router,
-};
-use bytes::Bytes;
-use futures::StreamExt;
-use std::{net::SocketAddr, time::Duration};
-use tokio::sync::broadcast;
 
-use rustcv_backend_v4l2::V4l2Driver;
-use rustcv_core::builder::{CameraConfig, Priority};
-use rustcv_core::pixel_format::FourCC;
-use rustcv_core::traits::{Driver, Stream};
-
+#[cfg(target_os = "linux")]
 // 图像参数
 const WIDTH: u32 = 640;
+#[cfg(target_os = "linux")]
 const HEIGHT: u32 = 480;
 
+#[cfg(target_os = "linux")]
 // 应用状态：保存广播通道的发送端
 #[derive(Clone)]
 struct AppState {
@@ -28,8 +14,27 @@ struct AppState {
     tx: broadcast::Sender<Bytes>,
 }
 
+#[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<()> {
+    use anyhow::{Context, Result};
+    use axum::{
+        body::Body,
+        extract::State,
+        response::{IntoResponse, Response},
+        routing::get,
+        Router,
+    };
+    use bytes::Bytes;
+    use futures::StreamExt;
+    use std::{net::SocketAddr, time::Duration};
+    use tokio::sync::broadcast;
+
+    use rustcv_backend_v4l2::V4l2Driver;
+    use rustcv_core::builder::{CameraConfig, Priority};
+    use rustcv_core::pixel_format::FourCC;
+    use rustcv_core::traits::{Driver, Stream};
+
     tracing_subscriber::fmt::init();
     println!("=== RustCV Web Streaming Demo ===");
 
@@ -102,6 +107,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 /// 首页 HTML
 async fn index_page() -> impl IntoResponse {
     axum::response::Html(
@@ -122,6 +128,7 @@ async fn index_page() -> impl IntoResponse {
     )
 }
 
+#[cfg(target_os = "linux")]
 /// 视频流处理函数 (MJPEG)
 async fn stream_handler(State(state): State<AppState>) -> Response {
     // 1. 创建订阅流
@@ -163,6 +170,7 @@ async fn stream_handler(State(state): State<AppState>) -> Response {
     response
 }
 
+#[cfg(target_os = "linux")]
 /// 辅助函数：YUYV -> JPEG
 /// 注意：这里的性能不是最优的，仅做演示。
 /// 生产环境应直接使用 libjpeg-turbo 的 C 绑定或 SIMD 优化的库。
@@ -183,6 +191,7 @@ fn encode_frame_to_jpeg(yuyv_data: &[u8], width: u32, height: u32) -> Result<Vec
     Ok(jpeg_buffer)
 }
 
+#[cfg(target_os = "linux")]
 // 专门为 image crate 优化的 YUYV -> RGB8 (R,G,B, R,G,B...)
 fn yuyv_to_rgb8(src: &[u8], dest: &mut [u8]) {
     let limit = src.len() / 4;
@@ -220,6 +229,7 @@ fn yuyv_to_rgb8(src: &[u8], dest: &mut [u8]) {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[inline]
 fn clip(val: i32) -> u8 {
     if val < 0 {
@@ -229,4 +239,9 @@ fn clip(val: i32) -> u8 {
     } else {
         val as u8
     }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn main() {
+    println!("This example is only supported on Linux with V4L2.");
 }

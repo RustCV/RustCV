@@ -13,6 +13,8 @@ categories = ["hardware-support", "multimedia::video", "science::robotics"]
 simulation = []
 
 [dependencies]
+
+[target.'cfg(target_os = "macos")'.dependencies]
 # 核心库引用
 rustcv-core = { version = "0.1", path = "../rustcv-core" }
 

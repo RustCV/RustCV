@@ -1,5 +1,6 @@
 [workspace]
-members = ["rustcv",
+members = [
+    "rustcv",
     "rustcv-backend-avf",
     "rustcv-backend-msmf",
     "rustcv-backend-v4l2",
@@ -7,3 +8,5 @@ members = ["rustcv",
     "rustcv-simulation",
 ]
 resolver = "2"
+
+default-members = ["rustcv"]
