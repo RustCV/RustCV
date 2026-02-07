@@ -38,7 +38,6 @@ impl Driver for MsmfDriver {
     }
 }
 
-
 pub fn default_driver() -> Arc<dyn Driver> {
     Arc::new(MsmfDriver::new())
 }

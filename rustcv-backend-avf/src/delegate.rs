@@ -1,5 +1,5 @@
 // src/delegate.rs
-use objc2::{ClassType, DeclaredClass, define_class, msg_send, rc::Retained};
+use objc2::{define_class, msg_send, rc::Retained, ClassType, DeclaredClass};
 use objc2_av_foundation::{
     AVCaptureConnection, AVCaptureOutput, AVCaptureVideoDataOutputSampleBufferDelegate,
 };

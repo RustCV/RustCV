@@ -37,7 +37,7 @@ impl MsmfStream {
     ) -> Result<Self> {
         let stride = (fmt.width * fmt.format.bpp_estimate() / 8) as usize;
         let estimated_size = stride * fmt.height as usize;
-        
+
         Ok(Self {
             source_reader,
             width: fmt.width,
@@ -55,49 +55,24 @@ impl MsmfStream {
         CameraError::Io(std::io::Error::other(e.to_string()))
     }
 
-    unsafe fn read_sample_with_retry(&self) -> Result<(IMFSample, i64)> {
-        let mut stream_index = 0u32;
-        let mut flags = 0u32;
-        let mut timestamp = 0i64;
-        let mut sample = None;
-
-        loop {
-            self.source_reader
-                .ReadSample(
-                    MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32,
-                    0u32,
-                    Some(&mut stream_index),
-                    Some(&mut flags),
-                    Some(&mut timestamp),
-                    Some(&mut sample),
-                )
-                .map_err(Self::hresult_to_camera_error)?;
-
-            if sample.is_some() {
-                break;
-            }
-        }
-
-        let sample = sample.ok_or_else(|| {
-            CameraError::Io(std::io::Error::other("No sample received"))
-        })?;
-
-        Ok((sample, timestamp))
-    }
-
     unsafe fn extract_frame_data(&mut self, media_buffer: &IMFMediaBuffer) -> Result<()> {
         let mut data_ptr = std::ptr::null_mut();
         let mut current_length = 0u32;
         let mut max_length = 0u32;
 
         media_buffer
-            .Lock(&mut data_ptr, Some(&mut max_length), Some(&mut current_length))
+            .Lock(
+                &mut data_ptr,
+                Some(&mut max_length),
+                Some(&mut current_length),
+            )
             .map_err(Self::hresult_to_camera_error)?;
 
         if self.frame_data.capacity() < current_length as usize {
-            self.frame_data.reserve(current_length as usize - self.frame_data.capacity());
+            self.frame_data
+                .reserve(current_length as usize - self.frame_data.capacity());
         }
-        
+
         self.frame_data.set_len(current_length as usize);
         std::ptr::copy_nonoverlapping(
             data_ptr as *const u8,
@@ -105,7 +80,9 @@ impl MsmfStream {
             current_length as usize,
         );
 
-        media_buffer.Unlock().map_err(Self::hresult_to_camera_error)?;
+        media_buffer
+            .Unlock()
+            .map_err(Self::hresult_to_camera_error)?;
         Ok(())
     }
 }
@@ -126,8 +103,31 @@ impl Stream for MsmfStream {
         if !self.is_streaming {
             return Err(CameraError::Io(std::io::Error::other("Stream not started")));
         }
+        let mut stream_index = 0u32;
+        let mut flags = 0u32;
+        let mut timestamp = 0i64;
+        let mut sample = None;
 
-        let (sample, timestamp) = unsafe { self.read_sample_with_retry()? };
+        loop {
+            unsafe {
+                self.source_reader
+                    .ReadSample(
+                        MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32,
+                        0u32,
+                        Some(&mut stream_index),
+                        Some(&mut flags),
+                        Some(&mut timestamp),
+                        Some(&mut sample),
+                    )
+                    .map_err(Self::hresult_to_camera_error)?;
+            }
+            if sample.is_some() {
+                break;
+            }
+        }
+
+        let sample =
+            sample.ok_or_else(|| CameraError::Io(std::io::Error::other("No sample received")))?;
 
         let media_buffer = unsafe {
             sample
