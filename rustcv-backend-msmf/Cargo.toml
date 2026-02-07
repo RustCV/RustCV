@@ -20,10 +20,11 @@ windows = { version = "0.62", features = [
     "Win32_System_Com",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
-    "Win32_System_Threading",
+    "Win32_System_Threading"
+  
 ] }
-
-tokio = { version = "1.0", features = ["fs", "rt"] }
+windows-core ={ version = "0.62"} 
+tokio = { version = "1.0", features = ["fs", "rt", "sync"] }
 async-trait = "0.1"
 
 tracing = "0.1"

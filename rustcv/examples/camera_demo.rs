@@ -10,7 +10,7 @@ fn main() -> Result<()> {
     // 1. 打开摄像头 (索引 0)
     // 底层会自动启动后台线程和 Tokio Runtime
     println!("Opening camera...");
-    let mut cap = VideoCapture::new(4)?;
+    let mut cap = VideoCapture::new(0)?;
 
     // 这一行会触发：停止流 -> 重置参数 -> 重新打开 -> 启动流
     println!("Setting resolution to 640x480...");

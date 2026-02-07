@@ -1,3 +1,11 @@
+//! Device management for Windows Media Foundation (MSMF) camera backend.
+//!
+//! This module provides core functionality for:
+//! - Media Foundation initialization and lifecycle management
+//! - Camera device enumeration and discovery
+//! - Format negotiation and selection
+//! - Device stream creation and configuration
+
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock};
@@ -14,22 +22,93 @@ use crate::controls::create_controls;
 use crate::pixel_map;
 use crate::stream::MsmfStream;
 
+/// Flag tracking whether Media Foundation has been initialized
 static INITIALIZED: LazyLock<Arc<AtomicBool>> = LazyLock::new(|| Arc::new(AtomicBool::new(false)));
+/// Reference counter for Media Foundation instances
 static CAMERA_REFCNT: LazyLock<Arc<AtomicUsize>> = LazyLock::new(|| Arc::new(AtomicUsize::new(0)));
 
+/// Converts Windows HRESULT error to CameraError
+///
+/// # Arguments
+/// * `e` - The HResult error from Windows API
+///
+/// # Returns
+/// A CameraError wrapping the error message
 fn hresult_to_camera_error(e: HResultError) -> CameraError {
     CameraError::Io(std::io::Error::other(e.to_string()))
 }
 
+/// Initializes the Media Foundation and COM subsystem
+///
+/// This function performs one-time initialization of the Windows Media Foundation
+/// and COM runtime. It uses reference counting to ensure proper lifecycle management.
+/// Multiple calls are safe; only the first call performs actual initialization.
+///
+/// Uses compare_exchange for efficient lock-free initialization.
+pub fn initialize_mf() -> Result<()> {
+    if INITIALIZED
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+        .is_ok()
+    {
+        // We won the race to initialize
+        unsafe {
+            if let Err(e) = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok() {
+                INITIALIZED.store(false, Ordering::Release);
+                return Err(CameraError::Io(std::io::Error::other(e.to_string())));
+            }
+
+            if let Err(e) = MFStartup(MF_API_VERSION, MFSTARTUP_NOSOCKET) {
+                // Clean up COM if MF startup fails
+                CoUninitialize();
+                INITIALIZED.store(false, Ordering::Release);
+                return Err(CameraError::Io(std::io::Error::other(e.to_string())));
+            }
+        }
+    }
+    // Increment reference count (use Release for synchronization with shutdown)
+    CAMERA_REFCNT.fetch_add(1, Ordering::Release);
+    Ok(())
+}
+
+/// Shuts down the Media Foundation subsystem
+///
+/// This function decrements the reference count and performs actual shutdown
+/// when the count reaches zero. This ensures proper cleanup of resources.
+/// Safe to call multiple times.
+pub fn shutdown_mf() {
+    let refcnt = &*CAMERA_REFCNT;
+    // Decrement reference count with SeqCst to ensure proper synchronization
+    // SeqCst ensures that all memory operations before this point are visible
+    // to other threads before we check if we need to shutdown
+    if refcnt.fetch_sub(1, Ordering::SeqCst) == 1 {
+        let initialized = &*INITIALIZED;
+        if initialized.load(Ordering::SeqCst) {
+            unsafe {
+                let _ = MFShutdown();
+                CoUninitialize();
+            }
+            initialized.store(false, Ordering::SeqCst);
+        }
+    }
+}
+
+/// Lists all available camera devices connected to the system
+///
+/// # Returns
+/// A vector of `DeviceInfo` structs containing device name, ID, and backend information.
+/// Returns an empty vector if no devices are found.
 pub fn list_devices() -> Result<Vec<DeviceInfo>> {
     initialize_mf()?;
 
     unsafe {
-        let mut attributes = None;
-        MFCreateAttributes(&mut attributes, 1).map_err(hresult_to_camera_error)?;
+        // Create media foundation attributes for device enumeration
+        let mut attributes = MaybeUninit::<Option<IMFAttributes>>::uninit();
+        MFCreateAttributes(attributes.as_mut_ptr(), 1).map_err(hresult_to_camera_error)?;
         let attributes = attributes
+            .assume_init()
             .ok_or_else(|| CameraError::Io(std::io::Error::other("Failed to create attributes")))?;
 
+        // Set the source type to video capture devices
         attributes
             .SetGUID(
                 &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
@@ -37,96 +116,135 @@ pub fn list_devices() -> Result<Vec<DeviceInfo>> {
             )
             .map_err(hresult_to_camera_error)?;
 
-        let mut pp_devices: MaybeUninit<*mut Option<IMFActivate>> = MaybeUninit::uninit();
-        let mut count: u32 = 0;
-        MFEnumDeviceSources(&attributes, pp_devices.as_mut_ptr(), &mut count)
+        // Enumerate all video capture devices
+        let mut pp_devices = MaybeUninit::<*mut Option<IMFActivate>>::uninit();
+        let mut count = MaybeUninit::<u32>::uninit();
+
+        MFEnumDeviceSources(&attributes, pp_devices.as_mut_ptr(), count.as_mut_ptr())
             .map_err(hresult_to_camera_error)?;
 
-        let ptr = pp_devices.assume_init();
-        let devices = if count > 0 && !ptr.is_null() {
-            let slice = std::slice::from_raw_parts_mut(ptr, count as usize);
-            let result: Vec<IMFActivate> = slice.iter_mut().filter_map(|opt| opt.take()).collect();
-            CoTaskMemFree(Some(ptr as *const std::ffi::c_void));
-            result
-        } else {
-            Vec::new()
-        };
+        let pp_devices = pp_devices.assume_init();
+        let count = count.assume_init();
 
-        Ok(devices
-            .into_iter()
-            .filter_map(|device| {
+        if count == 0 || pp_devices.is_null() {
+            return Ok(Vec::new());
+        }
+
+        // Convert raw pointer to slice for safe iteration
+        let slice = std::slice::from_raw_parts_mut(pp_devices, count as usize);
+        let mut result = Vec::with_capacity(count as usize);
+
+        // Extract device information from each IMFActivate object
+        for activate_opt in slice {
+            if let Some(device) = activate_opt.take() {
                 let name = get_attribute_string(&device, MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME);
-                if name.is_empty() {
-                    None
-                } else {
-                    Some(DeviceInfo {
+
+                // Skip devices with empty names early to avoid unnecessary ID retrieval
+                if !name.is_empty() {
+                    let id = get_attribute_string(
+                        &device,
+                        MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK,
+                    );
+
+                    result.push(DeviceInfo {
                         name,
-                        id: get_attribute_string(
-                            &device,
-                            MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK,
-                        ),
+                        id,
                         backend: "MSMF".to_string(),
                         bus_info: None,
-                    })
+                    });
                 }
-            })
-            .collect())
+            }
+        }
+
+        // Free the allocated device array
+        CoTaskMemFree(Some(pp_devices as *const _));
+        Ok(result)
     }
 }
 
-/// Retrieves a string attribute from a device's `IMFActivate` interface.
+/// Extracts a string attribute from a Media Foundation device
 unsafe fn get_attribute_string(attr: &IMFActivate, guid: GUID) -> String {
-    let mut value = windows::core::PWSTR::null();
-    let mut length = 0;
+    let mut value = MaybeUninit::uninit();
+    let mut length = MaybeUninit::uninit();
 
-    // The `GetAllocatedString` function allocates memory that we must free later.
+    // Attempt to retrieve the string attribute.
     if attr
-        .GetAllocatedString(&guid, &mut value, &mut length)
-        .is_ok()
-        && !value.is_null()
+        .GetAllocatedString(&guid, value.as_mut_ptr(), length.as_mut_ptr())
+        .is_err()
     {
-        let slice = std::slice::from_raw_parts(value.as_ptr(), length as usize);
-        let result = String::from_utf16_lossy(slice);
-        // Free the memory allocated by the Windows API.
-        CoTaskMemFree(Some(value.as_ptr() as *const std::ffi::c_void));
-        result
-    } else {
-        String::new()
+        return String::new();
     }
+
+    let value = value.assume_init();
+    let length = length.assume_init();
+
+    let result = {
+        let slice = std::slice::from_raw_parts(value.as_ptr(), length as usize);
+        String::from_utf16(slice).unwrap_or_else(|_| String::from_utf16_lossy(slice).to_owned())
+    };
+
+    // The memory was allocated by COM and must be freed with CoTaskMemFree.
+    CoTaskMemFree(Some(value.as_ptr() as *const _));
+
+    result
 }
 
-/// Opens a camera device by its ID and applies the given configuration.
+/// Opens a camera device and negotiates the video format based on configuration
+///
+/// This is the main entry point for opening a camera. The function:
+/// 1. Initializes Media Foundation if not already initialized
+/// 2. Creates a hardware MediaSource for the specified device
+/// 3. Probes supported formats directly from the MediaSource
+/// 4. Selects the best matching format based on configuration requirements
+/// 5. Creates an async MsmfStream with proper format negotiation
+/// 6. Sets up device control interfaces
+///
+/// # Arguments
+/// * `id` - Device symbolic link ID or identifier string
+/// * `config` - Camera configuration with resolution and format requirements
+///
+/// # Returns
+/// A tuple containing:
+/// - `Box<dyn Stream>` - The initialized camera stream for frame capture
+/// - `DeviceControls` - Control interface for device-specific operations (exposure, focus, etc.)
 pub fn open(id: &str, config: CameraConfig) -> Result<(Box<dyn Stream>, DeviceControls)> {
     initialize_mf()?;
 
-    let source_reader = unsafe { create_source_reader(id)? };
-    let negotiated_fmt = negotiate_format(&source_reader, &config)?;
-    unsafe { set_output_media_type(&source_reader, &negotiated_fmt)? };
+    // 1. Find and create hardware MediaSource
+    let media_source = unsafe { create_media_source(id)? };
+
+    // 2. Directly probe supported formats from MediaSource without creating Reader yet
+    let negotiated_fmt = negotiate_format(&media_source, &config)?;
 
     tracing::info!(
-        "Camera opened: {}x{} @ {:?}",
+        "Camera opened: {}x{} @ {}fps ({:?})",
         negotiated_fmt.width,
         negotiated_fmt.height,
+        negotiated_fmt.fps,
         negotiated_fmt.format
     );
 
-    let source_reader_arc = Arc::new(source_reader);
-    let stream = MsmfStream::new(
-        source_reader_arc.clone(),
-        &negotiated_fmt,
-        config.buffer_count,
-    )?;
-    let controls = create_controls(source_reader_arc);
+    // 3. Create MsmfStream
+    // Async Reader creation and callback binding are now fully encapsulated inside MsmfStream
+    let stream = MsmfStream::new(&media_source, negotiated_fmt)
+        .map_err(|e| CameraError::Io(std::io::Error::other(e.to_string())))?;
+
+    let controls = create_controls(stream.get_reader());
 
     Ok((Box::new(stream), controls))
 }
 
-/// Creates and configures an `IMFSourceReader` for the camera device with the given ID.
-unsafe fn create_source_reader(id: &str) -> Result<IMFSourceReader> {
+/// Creates a MediaSource for a specific camera device
+///
+/// # Arguments
+/// * `id` - Device symbolic link ID
+///
+/// # Returns
+/// The created IMFMediaSource interface for the device
+unsafe fn create_media_source(id: &str) -> Result<IMFMediaSource> {
     let mut attributes = None;
     MFCreateAttributes(&mut attributes, 2).map_err(hresult_to_camera_error)?;
-    let attributes = attributes
-        .ok_or_else(|| CameraError::Io(std::io::Error::other("Failed to create attributes")))?;
+    let attributes = attributes.unwrap();
 
     attributes
         .SetGUID(
@@ -143,116 +261,85 @@ unsafe fn create_source_reader(id: &str) -> Result<IMFSourceReader> {
         )
         .map_err(hresult_to_camera_error)?;
 
-    let source = MFCreateDeviceSource(&attributes).map_err(hresult_to_camera_error)?;
-    let source_reader =
-        MFCreateSourceReaderFromMediaSource(&source, None).map_err(hresult_to_camera_error)?;
-
-    select_video_stream(&source_reader)?;
-
-    Ok(source_reader)
+    MFCreateDeviceSource(&attributes).map_err(hresult_to_camera_error)
 }
 
-/// Selects only the first video stream from the source reader.
-unsafe fn select_video_stream(source_reader: &IMFSourceReader) -> Result<()> {
-    source_reader
-        .SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)
-        .map_err(hresult_to_camera_error)?;
-    source_reader
-        .SetStreamSelection(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, true)
-        .map_err(hresult_to_camera_error)?;
-    Ok(())
-}
-
-/// Sets the output media type on the source reader based on the negotiated format.
-unsafe fn set_output_media_type(
-    source_reader: &IMFSourceReader,
-    negotiated_fmt: &NegotiatedFormat,
-) -> Result<()> {
-    let media_type = create_media_type(negotiated_fmt)?;
-
-    source_reader
-        .SetCurrentMediaType(
-            MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32,
-            None,
-            &media_type,
-        )
-        .map_err(hresult_to_camera_error)?;
-
-    source_reader
-        .Flush(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32)
-        .map_err(hresult_to_camera_error)?;
-
-    Ok(())
-}
-
-unsafe fn create_media_type(format: &NegotiatedFormat) -> Result<IMFMediaType> {
-    let media_type = MFCreateMediaType().map_err(hresult_to_camera_error)?;
-
-    media_type
-        .SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)
-        .map_err(hresult_to_camera_error)?;
-
-    let mf_guid = pixel_map::to_mf_guid(format.format).ok_or(CameraError::FormatNotSupported)?;
-    media_type
-        .SetGUID(&MF_MT_SUBTYPE, &mf_guid)
-        .map_err(hresult_to_camera_error)?;
-
-    media_type
-        .SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)
-        .map_err(hresult_to_camera_error)?;
-
-    let frame_size = ((format.width as u64) << 32) | (format.height as u64);
-    media_type
-        .SetUINT64(&MF_MT_FRAME_SIZE, frame_size)
-        .map_err(hresult_to_camera_error)?;
-
-    Ok(media_type)
-}
-
-/// Represents a video format that has been successfully negotiated with the device.
-pub struct NegotiatedFormat {
-    pub width: u32,
-    pub height: u32,
-    pub format: PixelFormat,
-    pub fps: u32,
-}
-
-/// Iterates through the device's available formats and selects the best one based on the user's config.
-fn negotiate_format(
-    source_reader: &IMFSourceReader,
-    config: &CameraConfig,
-) -> Result<NegotiatedFormat> {
-    (0..)
-        .map(|index| unsafe {
-            source_reader.GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, index)
-        })
-        .take_while(|result| result.is_ok())
-        .filter_map(|result| result.ok())
-        .filter_map(|media_type| unsafe { parse_media_type(&media_type, config) })
-        .max_by_key(|(score, _)| *score)
-        .map(|(_, fmt)| fmt)
-        .ok_or(CameraError::FormatNotSupported)
-}
-
-/// Parses a Media Foundation media type into a NegotiatedFormat.
+/// Negotiates and selects the best video format from available options
 ///
-/// This function extracts format information from an IMFMediaType object
-/// and evaluates it against the user's configuration preferences.
+/// This function:
+/// 1. Gets the presentation descriptor from the MediaSource
+/// 2. Extracts the primary video stream descriptor
+/// 3. Iterates through all available media types
+/// 4. Parses each media type and calculates a match score
+/// 5. Selects the format with the highest score
 ///
 /// # Arguments
-///
-/// * `media_type` - The Media Foundation media type to parse.
-/// * `config` - The camera configuration containing format preferences.
+/// * `source` - The IMFMediaSource to query
+/// * `config` - Camera configuration with format preferences
 ///
 /// # Returns
+/// A `NegotiatedFormat` struct with selected resolution, format, and frame rate
+fn negotiate_format(source: &IMFMediaSource, config: &CameraConfig) -> Result<NegotiatedFormat> {
+    unsafe {
+        // Create presentation descriptor to access stream information
+        let pd = source
+            .CreatePresentationDescriptor()
+            .map_err(hresult_to_camera_error)?;
+        let mut selected = false.into();
+        let mut sd = None;
+
+        // Get the primary video stream descriptor (index 0)
+        pd.GetStreamDescriptorByIndex(0, &mut selected, &mut sd)
+            .map_err(hresult_to_camera_error)?;
+        let sd =
+            sd.ok_or_else(|| CameraError::Io(std::io::Error::other("No video stream found")))?;
+
+        // Get media type handler for format enumeration
+        let handler = sd.GetMediaTypeHandler().map_err(hresult_to_camera_error)?;
+        let count = handler
+            .GetMediaTypeCount()
+            .map_err(hresult_to_camera_error)?;
+
+        // Early exit if no media types available
+        if count == 0 {
+            return Err(CameraError::FormatNotSupported);
+        }
+
+        // Iterate through media types, tracking best format to avoid unnecessary clones
+        let mut best_format: Option<(i32, NegotiatedFormat)> = None;
+
+        for index in 0..count {
+            if let Ok(mt) = handler.GetMediaTypeByIndex(index) {
+                if let Some((score, fmt)) = parse_media_type(&mt, config) {
+                    if best_format
+                        .as_ref()
+                        .is_none_or(|(best_score, _)| score > *best_score)
+                    {
+                        best_format = Some((score, fmt));
+                    }
+                }
+            }
+        }
+
+        best_format
+            .map(|(_, fmt)| fmt)
+            .ok_or(CameraError::FormatNotSupported)
+    }
+}
+
+/// Parses a Media Foundation media type and calculates format score
 ///
-/// * `Some((score, format))` - The calculated score and negotiated format if parsing succeeds.
-/// * `None` - If the media type is not a video type or parsing fails.
+/// This function extracts video format parameters from an IMFMediaType and
+/// calculates a score based on how well it matches the configuration requirements.
 ///
-/// # Safety
+/// # Arguments
+/// * `media_type` - The Media Foundation media type to parse
+/// * `config` - Camera configuration with resolution and format preferences
 ///
-/// This function is unsafe as it calls Windows Media Foundation APIs
-/// that require unsafe context.
+/// # Returns
+/// `Option<(i32, NegotiatedFormat)>` tuple containing:
+/// - Score (higher is better)
+/// - NegotiatedFormat with extracted parameters
 unsafe fn parse_media_type(
     media_type: &IMFMediaType,
     config: &CameraConfig,
@@ -265,8 +352,14 @@ unsafe fn parse_media_type(
     let core_fmt = pixel_map::from_mf_guid(&subtype);
 
     let frame_size = media_type.GetUINT64(&MF_MT_FRAME_SIZE).ok()?;
-    let height = (frame_size & 0xFFFFFFFF) as u32;
     let width = ((frame_size >> 32) & 0xFFFFFFFF) as u32;
+    let height = (frame_size & 0xFFFFFFFF) as u32;
+
+    let fps = media_type
+        .GetUINT64(&MF_MT_FRAME_RATE)
+        .ok()
+        .map(|val| (val >> 32) as u32 / (val & 0xFFFFFFFF).max(1) as u32)
+        .unwrap_or(30);
 
     let score = calculate_format_score(config, width, height, core_fmt);
 
@@ -276,89 +369,95 @@ unsafe fn parse_media_type(
             width,
             height,
             format: core_fmt,
-            fps: 30,
+            fps,
+            media_type: media_type.clone(),
         },
     ))
 }
 
-/// Calculates a score for a given format based on the user's configuration preferences.
-/// Higher scores indicate better matches. The score considers:
-/// - Exact resolution matches (with priority weighting)
-/// - Exact format matches (with priority weighting)
-/// - Resolution distance (penalty for non-matching resolutions)
+/// Calculates a score for format selection based on configuration preferences
+///
+/// The scoring algorithm prioritizes:
+/// 1. Exact resolution match (if configured)
+/// 2. Supported pixel format (if configured)
+/// 3. Closest resolution match (as fallback)
+///
+/// Uses a single-pass algorithm to avoid duplicate iterations of configuration vectors.
+///
+/// # Arguments
+/// * `config` - Camera configuration with preferences and priorities
+/// * `w` - Width of the format to score
+/// * `h` - Height of the format to score
+/// * `fmt` - Pixel format to score
+///
+/// # Returns
+/// An integer score where higher values indicate better matches
 fn calculate_format_score(config: &CameraConfig, w: u32, h: u32, fmt: PixelFormat) -> i32 {
-    // Score for exact resolution match, weighted by priority
-    let resolution_score = config
-        .resolution_req
-        .iter()
-        .find(|(req_w, req_h, _)| w == *req_w && h == *req_h)
-        .map_or(0, |(_, _, prio)| *prio as i32 * 10);
+    // Fast path: Check for exact resolution match while calculating distance in one pass
+    let mut resolution_score = 0i32;
+    let mut min_distance = i32::MAX;
 
-    // Score for exact format match, weighted by priority
+    for (req_w, req_h, prio) in &config.resolution_req {
+        if w == *req_w && h == *req_h {
+            // Exact match found - highest priority
+            resolution_score = *prio as i32 * 10;
+            min_distance = 0; // Signal that exact match was found
+            break;
+        } else {
+            // Track closest resolution during iteration
+            let w_diff = (w as i32 - *req_w as i32).abs();
+            let h_diff = (h as i32 - *req_h as i32).abs();
+            let distance = w_diff + h_diff;
+            if distance < min_distance {
+                min_distance = distance;
+            }
+        }
+    }
+
+    // Score for supported format (multiplied by 10 for emphasis)
     let format_score = config
         .format_req
         .iter()
         .find(|(req_fmt, _)| fmt == *req_fmt)
         .map_or(0, |(_, prio)| *prio as i32 * 10);
 
-    // Calculate distance from preferred resolutions if no exact match
-    // This penalizes formats that are far from the requested resolution
-    let resolution_distance = if resolution_score == 0 {
-        config
-            .resolution_req
-            .iter()
-            .map(|(req_w, req_h, _)| {
-                let w_diff = (w as i32 - *req_w as i32).abs();
-                let h_diff = (h as i32 - *req_h as i32).abs();
-                -(w_diff + h_diff)
-            })
-            .max()
-            .unwrap_or(-1000)
+    // Resolution distance penalty for non-exact matches
+    let resolution_distance = if resolution_score > 0 {
+        // Exact match found - no distance penalty
+        0
+    } else if min_distance < i32::MAX {
+        // Approximate match - penalize by distance
+        -min_distance
+    } else if !config.resolution_req.is_empty() {
+        // Required formats specified but none found - large penalty
+        -1000
     } else {
+        // No resolution requirements specified
         0
     };
 
+    // Combined score: exact matches have priority, then format compatibility,
+    // then closest resolution match
     resolution_score + format_score + resolution_distance
 }
 
-/// Initializes the Media Foundation and COM subsystems with reference counting.
-/// This function uses atomic operations to ensure thread-safe initialization.
-/// The reference counting allows multiple camera instances to share the same MF/COM initialization.
-pub fn initialize_mf() -> Result<()> {
-    let initialized = &*INITIALIZED;
-    let refcnt = &*CAMERA_REFCNT;
-
-    if !initialized.load(Ordering::SeqCst) {
-        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
-            .ok()
-            .map_err(|e| CameraError::Io(std::io::Error::other(e.to_string())))?;
-
-        unsafe { MFStartup(MF_API_VERSION, MFSTARTUP_NOSOCKET) }.map_err(|e| {
-            unsafe {
-                CoUninitialize();
-            }
-            CameraError::Io(std::io::Error::other(e.to_string()))
-        })?;
-
-        initialized.store(true, Ordering::SeqCst);
-    }
-    refcnt.fetch_add(1, Ordering::SeqCst);
-    Ok(())
-}
-
-/// Shuts down the Media Foundation and COM subsystems using reference counting.
-/// Only performs actual shutdown when the reference count reaches zero.
-/// This ensures proper cleanup when all camera instances are closed.
-pub fn shutdown_mf() {
-    let refcnt = &*CAMERA_REFCNT;
-    if refcnt.fetch_sub(1, Ordering::SeqCst) == 1 {
-        let initialized = &*INITIALIZED;
-        if initialized.load(Ordering::SeqCst) {
-            unsafe {
-                let _ = MFShutdown();
-                CoUninitialize();
-            }
-            initialized.store(false, Ordering::SeqCst);
-        }
-    }
+/// Represents a negotiated video format between application requirements and device capabilities.
+///
+/// This struct is produced by the format negotiation process and contains:
+/// - The selected resolution (width × height)
+/// - The pixel format (e.g., YUYV, NV12)
+/// - The frame rate
+/// - The Media Foundation media type for configuring the source reader
+pub struct NegotiatedFormat {
+    /// Frame width in pixels.
+    pub width: u32,
+    /// Frame height in pixels.
+    pub height: u32,
+    /// Pixel format (e.g., YUYV, NV12).
+    pub format: PixelFormat,
+    /// Frame rate in frames per second.
+    #[allow(dead_code)]
+    pub fps: u32,
+    /// The Media Foundation media type for the source reader.
+    pub media_type: IMFMediaType,
 }

@@ -9,7 +9,7 @@ pub enum CameraError {
     BandwidthExceeded {
         required_mbps: u32,
         limit_mbps: u32,
-        suggestion: String, // e.g., "Try MJPEG format"
+        suggestion: String,
     },
 
     #[error("Device busy: Exclusive access required")]
@@ -23,6 +23,9 @@ pub enum CameraError {
 
     #[error("Simulation backend error: {0}")]
     SimulationError(String),
+
+    #[error("Backend error: {0}")]
+    BackendError(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
