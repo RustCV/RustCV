@@ -1,14 +1,21 @@
+#[cfg(target_os = "linux")]
 use anyhow::{Context, Result};
+#[cfg(target_os = "linux")]
 use minifb::{Key, Window, WindowOptions};
-use std::time::{Duration, Instant};
-
+#[cfg(target_os = "linux")]
 use rustcv_backend_v4l2::V4l2Driver;
+#[cfg(target_os = "linux")]
 use rustcv_core::builder::{CameraConfig, Priority};
+#[cfg(target_os = "linux")]
 use rustcv_core::pixel_format::FourCC;
+#[cfg(target_os = "linux")]
 use rustcv_core::traits::Driver;
-
+#[cfg(target_os = "linux")]
+use std::time::{Duration, Instant};
+#[cfg(target_os = "linux")]
 use v4l::video::Capture;
 
+#[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<()> {
     // 1. 初始化日志，以便看到我们之前埋下的 tracing::info!
@@ -139,6 +146,7 @@ async fn main() -> Result<()> {
 
 /// 辅助函数：将 YUYV (YUV422) 转换为 RGB32 (用于 minifb 显示)
 /// 算法：标准 BT.601 转换
+#[cfg(target_os = "linux")]
 fn yuyv_to_rgb32(src: &[u8], dest: &mut [u32], width: usize, height: usize) {
     // 【作用1】安全检查：确保数据长度和分辨率匹配
     // YUYV 是每像素 2 字节，RGB32 是每像素 1 个 u32
@@ -189,6 +197,7 @@ fn yuyv_to_rgb32(src: &[u8], dest: &mut [u32], width: usize, height: usize) {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[inline]
 fn clip(val: i32) -> u32 {
     if val < 0 {
@@ -200,6 +209,7 @@ fn clip(val: i32) -> u32 {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn dump_capabilities(dev_path: &str) -> anyhow::Result<()> {
     println!("--- Inspecting capabilities for: {} ---", dev_path);
 
@@ -239,4 +249,9 @@ fn dump_capabilities(dev_path: &str) -> anyhow::Result<()> {
     }
     println!("----------------------------------------\n");
     Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn main() {
+    println!("This example is only supported on Linux with V4L2.");
 }

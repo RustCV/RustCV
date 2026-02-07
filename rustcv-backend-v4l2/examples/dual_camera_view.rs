@@ -1,17 +1,26 @@
+#[cfg(target_os = "linux")]
 use anyhow::{Context, Result};
+#[cfg(target_os = "linux")]
 use minifb::{Key, Window, WindowOptions};
+#[cfg(target_os = "linux")]
+use rustcv_backend_v4l2::V4l2Driver;
+#[cfg(target_os = "linux")]
+use rustcv_core::builder::{CameraConfig, Priority};
+#[cfg(target_os = "linux")]
+use rustcv_core::pixel_format::FourCC;
+#[cfg(target_os = "linux")]
+use rustcv_core::traits::{Driver, Stream};
+#[cfg(target_os = "linux")]
 use std::sync::{Arc, Mutex};
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
-use rustcv_backend_v4l2::V4l2Driver;
-use rustcv_core::builder::{CameraConfig, Priority};
-use rustcv_core::pixel_format::FourCC;
-use rustcv_core::traits::{Driver, Stream};
-
-// 定义画面尺寸
+#[cfg(target_os = "linux")]
 const WIDTH: usize = 640;
+#[cfg(target_os = "linux")]
 const HEIGHT: usize = 480;
 
+#[cfg(target_os = "linux")]
 // 共享的帧缓冲区，用于主线程渲染
 // DoubleBuffer 存放两路画面：[Left Buffer, Right Buffer]
 struct SharedBuffer {
@@ -21,8 +30,11 @@ struct SharedBuffer {
     updated_right: bool,
 }
 
+#[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<()> {
+    // 定义画面尺寸
+
     tracing_subscriber::fmt::init();
     println!("=== RustCV Dual Camera Demo ===");
 
@@ -142,6 +154,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 /// 将两个 640x480 的图拼成一个 1280x480 的图
 fn combine_buffers(left: &[u32], right: &[u32], dest: &mut [u32], w: usize, h: usize) {
     // 这是一个内存拷贝密集型操作，生产环境建议用 GPU Shader 做
@@ -159,6 +172,7 @@ fn combine_buffers(left: &[u32], right: &[u32], dest: &mut [u32], w: usize, h: u
     }
 }
 
+#[cfg(target_os = "linux")]
 // 复用之前的 YUYV 转 RGB 逻辑
 fn yuyv_to_rgb32(src: &[u8], dest: &mut [u32], width: usize, height: usize) {
     // 【作用1】安全检查：确保数据长度和分辨率匹配
@@ -204,6 +218,7 @@ fn yuyv_to_rgb32(src: &[u8], dest: &mut [u32], width: usize, height: usize) {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[inline]
 fn clip(val: i32) -> u32 {
     if val < 0 {
@@ -213,4 +228,9 @@ fn clip(val: i32) -> u32 {
     } else {
         val as u32
     }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn main() {
+    println!("This example is only supported on Linux with V4L2.");
 }

@@ -1,4 +1,5 @@
-// src/lib.rs
+#![cfg(target_os = "macos")]
+
 mod delegate;
 mod gcd;
 mod stream;

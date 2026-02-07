@@ -11,6 +11,6 @@ pub use core::mat::Mat;
 /// 预置模块，用户可以通过 `use rustcv::prelude::*;` 导入常用项
 pub mod prelude {
     pub use crate::core::mat::Mat;
+    pub use crate::core::tick_meter::TickMeter; // 高精度计时器
     pub use crate::videoio::VideoCapture;
-    // 未来添加更多...
 }

@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 pub mod controls;
 pub mod device;
 pub mod pixel_map;
