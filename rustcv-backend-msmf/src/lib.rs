@@ -1,16 +1,43 @@
 #![cfg(target_os = "windows")]
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+pub mod controls;
+pub mod device;
+pub mod pixel_map;
+pub mod stream;
+
+use rustcv_core::error::Result;
+use rustcv_core::traits::{DeviceControls, DeviceInfo, Driver, Stream};
+use std::sync::Arc;
+
+#[derive(Debug, Clone)]
+pub struct MsmfDriver;
+
+impl Default for MsmfDriver {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+impl MsmfDriver {
+    pub fn new() -> Self {
+        Self
     }
+}
+
+impl Driver for MsmfDriver {
+    fn list_devices(&self) -> Result<Vec<DeviceInfo>> {
+        device::list_devices()
+    }
+
+    fn open(
+        &self,
+        id: &str,
+        config: rustcv_core::builder::CameraConfig,
+    ) -> Result<(Box<dyn Stream>, DeviceControls)> {
+        device::open(id, config)
+    }
+}
+
+pub fn default_driver() -> Arc<dyn Driver> {
+    Arc::new(MsmfDriver::new())
 }
