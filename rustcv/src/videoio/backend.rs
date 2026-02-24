@@ -22,6 +22,12 @@ pub fn create_driver() -> Result<Box<dyn Driver>> {
         return Ok(Box::new(rustcv_backend_avf::AvfDriver::new()));
     }
 
+    #[cfg(all(feature = "windows-msmf", target_os = "windows"))]
+    {
+        // 注意：这里假设你之前的 MSMF Driver 结构体名为 MsmfDriver
+        return Ok(Box::new(rustcv_backend_msmf::MsmfDriver::new()));
+    }
+
     // 如果没有匹配的后端，返回错误
     Err(anyhow!(
         "No supported backend found for this OS. Please check Cargo features."
