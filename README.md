@@ -10,6 +10,8 @@ English | [简体中文](README_zh.md)
 [![License](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-edition%202021-orange)](https://www.rust-lang.org/)
 
+🔗 [Join the Discord](https://discord.gg/HkskXFgWAE)
+
 </div>
 
 # RustCV 🦀
@@ -41,12 +43,11 @@ English | [简体中文](README_zh.md)
 
 The project is currently in a rapid iteration phase, and platform support is as follows:
 
-| Platform    | Backend Technology | Status                     | Development Plan                                                                 |
-| :---------- | :----------------- | :------------------------- | :------------------------------------------------------------------------------- |
-| **Linux**   | **V4L2**           | 🚀 Initial support, some core functions implemented | Full-scale development to complete full functionality adaptation and deployment. Currently supports MJPEG/YUYV decoding and hot reloading. |
-| **macOS**   | AVFoundation       | 🚧 Under development, core function adaptation in progress | Continuous development to complete full functionality support and compatibility verification. |
-| **Windows** | MediaFoundation    | 📋 Development not yet started, no available functions | Included in the development plan, adaptation will begin after the core functions of the preceding platforms are stable. |
-
+| Platform    | Backend Technology | Status                                                     | Development Plan                                                                                                                           |
+| :---------- | :----------------- | :--------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Linux**   | **V4L2**           | 🚀 Initial support, some core functions implemented        | Full-scale development to complete full functionality adaptation and deployment. Currently supports MJPEG/YUYV decoding and hot reloading. |
+| **macOS**   | AVFoundation       | 🚧 Under development, core function adaptation in progress | Continuous development to complete full functionality support and compatibility verification.                                              |
+| **Windows** | MediaFoundation    | 📋 Development not yet started, no available functions     | Included in the development plan, adaptation will begin after the core functions of the preceding platforms are stable.                    |
 
 ## 📦 Quick Start
 
