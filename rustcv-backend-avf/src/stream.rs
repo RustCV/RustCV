@@ -1,5 +1,5 @@
 // src/stream.rs
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use objc2::rc::Retained;
 use objc2_av_foundation::{
@@ -7,7 +7,7 @@ use objc2_av_foundation::{
     AVCaptureVideoDataOutput,
 };
 use objc2_foundation::{NSNumber, NSString};
-use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use rustcv_core::error::CameraError;
 use rustcv_core::frame::{BackendBufferHandle, Frame, FrameMetadata, Timestamp};
