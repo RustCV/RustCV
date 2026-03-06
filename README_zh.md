@@ -8,7 +8,9 @@
 ### RustCV：用现代 Rust 重新定义的 OpenCV 兼容视觉处理框架
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/rustcv/rustcv)
-[![Platform](https://img.shields.io/badge/platform-Linux-blue)](https://github.com/rustcv/rustcv)
+[![Platform Linux](https://img.shields.io/badge/platform-Linux-blue)](#)
+[![Platform macOS](https://img.shields.io/badge/platform-macOS-lightgrey)](#)
+[![Platform Windows](https://img.shields.io/badge/platform-Windows-blueviolet)](#)
 [![License](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-edition%202021-orange)](https://www.rust-lang.org/)
 
@@ -27,30 +29,29 @@
 
 - **对标 OpenCV**：提供 `VideoCapture`, `Mat`, `imshow` 等经典 API，极大降低迁移成本。
 - **隐藏复杂性**：底层基于 `Tokio` 异步驱动，但对外暴露**同步阻塞**接口。你不需要处理 `async/await`，就能享受异步 IO 的性能。
-- **零拷贝设计**：通过智能的 **Buffer Swapping** 技术，实现从内核驱动到用户态 `Mat` 的零拷贝数据流转。
+- **开箱即用**：智能识别当前操作系统，自动作为强制依赖链接最合适的原生底层驱动，真正做到“零配置跨平台”。
 
 ## ✨ 核心特性 (Key Features)
 
 - 🦀 **Rust Native**: 纯 Rust 编写，无 C++ 依赖地狱。
-- ⚡ **高性能**:
-  - 内部集成 `Lazy Global Runtime`，自动管理异步驱动。
-  - 支持 `Stride` 内存布局，直接映射硬件缓冲区。
-- 🎨 **开箱即用**:
-  - **VideoIO**: 支持 V4L2 (Linux) 和 AVFoundation (macOS, WIP)。
-  - **HighGUI**: 基于 `minifb` 的轻量级跨平台窗口显示。
-  - **ImgProc**: 内置绘图原语（画框、写字）和 FPS 计算。
-  - **ImgCodecs**: 集成 `image-rs`，支持主流格式读写。
-- 🛠️ **强类型配置**: 拒绝魔法数字，提供 `cap.set_resolution(1280, 720)` 等强类型 API。
+- ⚡ **极致性能**:
+  - 内部集成 `Lazy Global Runtime`，自动管理异步硬件交互。
+  - 支持 `Stride` 内存布局，直接映射硬件视频缓冲区，并且实现了**高度优化的零开销边界转换（Zero-bounds-checking copy/SIMD ready）**。
+- 🎨 **全平台原生驱动体系**:
+  - **Linux**: 原生 `V4L2` 驱动集成。
+  - **macOS**: 原生 `AVFoundation` 驱动集成（支持 32BGRA 高效直出与 GCD 调度）。
+  - **Windows**: 原生 `MediaFoundation` (MSMF) 驱动集成。
+- 🛠️ **动态热重载与强类型**: 拒绝魔法数字，提供 `cap.set_resolution(1280, 720)` 等强类型 API，支持在不丢失摄像头句柄的情况下热切换硬件分辨率。
 
 ## 🖥️ 平台支持 (Platform Support)
 
-目前项目处于快速迭代期，平台支持情况如下：
+本项目现已完成三大主流桌面操作系统的核心底层驱动适配：
 
-| 平台        | 后端技术        | 状态                            | 开发规划                                                               |
+| 平台        | 后端技术        | 状态                            | 核心能力                                                               |
 | :---------- | :-------------- | :------------------------------ | :--------------------------------------------------------------------- |
-| **Linux**   | **V4L2**        | 🚀 初步支持，已实现部分核心功能 | 全力开发，完成全功能适配与落地。目前已支持 MJPEG/YUYV 解码，支持热重载 |
-| **macOS**   | AVFoundation    | 🚧 开发中，正推进核心功能适配   | 持续开发，完成全功能支持与兼容性验证                                   |
-| **Windows** | MediaFoundation | 📋 暂未启动开发，无可用功能     | 已纳入开发计划，待前序平台核心功能稳定后启动适配                       |
+| **Linux**   | **V4L2**        | 🟢 稳定支持 | YUYV/MJPEG 解码，硬件设备遍历，动态分辨率配置。 |
+| **macOS**   | **AVFoundation**| 🟢 稳定支持 | 并发 GCD 队列渲染，BGRA 硬件直通缓存，零拷贝数据流，动态 Preset 配置。|
+| **Windows** | **MSMF**        | 🟢 稳定支持 | Media Foundation 原生集成与硬件访问封装。 |
 
 ## 📦 安装 (Installation)
 
@@ -60,63 +61,99 @@
 [dependencies]
 rustcv = "0.1"
 
-# 或者手动指定
-# rustcv = { version= "0.1", features = ["linux-v4l2"] }
+# 可选：如果希望启用高速硬件级别的 JPEG 解码
+# rustcv = { version= "0.1", features = ["turbojpeg"] }
 ```
+
+> **注意：** 库会自动根据当前编译所在的 `target_os` 拉取对应的底层依赖（`rustcv-backend-v4l2`, `rustcv-backend-avf`, 等等），无需任何手动 feature 配置即可跨平台编译通过！
 
 ## 🚀 快速开始 (Quick Start)
 
-这是最激动人心的部分。看看代码是多么简洁：
+这是最激动人心的部分。看看代码是多么简洁，以下是一个具备**动态分辨率热切换**与**帧率检测**的完整实战用例：
 
 ```rust
 use anyhow::Result;
-use rustcv::prelude::*; // 引入 VideoCapture, Mat
-use rustcv::highgui;    // 引入 GUI
-use rustcv::imgproc;    // 引入 绘图
+use rustcv::{
+    highgui,    // 窗口与事件循环
+    imgproc,    // 图像处理与绘图原语
+    prelude::*, // 自动引入 VideoCapture, Mat 等核心组件
+};
+use std::time::Instant;
 
 fn main() -> Result<()> {
-    // 1. 打开摄像头 (索引 0)
-    // 底层自动启动异步 Runtime，无需 #[tokio::main]
+    // 1. 打开默认摄像头 (索引 0)
+    // 隐藏的异步 Runtime 会在后台随之启动
+    println!("Opening camera...");
     let mut cap = VideoCapture::new(0)?;
 
-    // 2. (可选) 设置高清分辨率
+    // 2. 配置初始分辨率 (同步阻塞调用，确保硬件完成重置)
     cap.set_resolution(640, 480)?;
-
+    
+    // 预分配用于承载图像帧的内存矩阵
     let mut frame = Mat::empty();
+    let mut high_res_mode = false;
 
-    println!("🎥 Start capturing... Press ESC to exit.");
+    // 帧率统计器
+    let mut last_time = Instant::now();
+    let mut frame_count = 0;
+    let mut fps = 0.0;
 
-    // 3. 经典循环
+    println!("Start capturing... Press SPACE to toggle resolution. Press ESC to exit.");
+
+    // 3. 经典 OpenCV 风格的主循环读取
     while cap.read(&mut frame)? {
         if frame.is_empty() { continue; }
 
-        // --- 图像处理 ---
-        // 在左上角绘制分辨率
-        imgproc::put_text(
-            &mut frame,
-            &format!("Res: {}x{}", frame.cols, frame.rows),
-            imgproc::Point::new(10, 30),
-            1.0,
-            imgproc::Scalar::new(0, 0, 255) // Red
-        );
-
-        // 画一个绿色的框
+        // --- 图像处理 (零拷贝/In-place 修改) ---
+        // 绘制一个静态追踪框
         imgproc::rectangle(
             &mut frame,
-            imgproc::Rect::new(200, 200, 300, 300),
-            imgproc::Scalar::new(0, 255, 0), // Green
-            2
+            imgproc::Rect::new(200, 150, 240, 240),
+            imgproc::Scalar::new(0, 255, 0), // 绿色 (BGR)
+            2,
         );
 
-        // --- 显示 ---
-        highgui::imshow("RustCV Camera", &frame)?;
+        // 每十帧更新一次计算出的 FPS
+        frame_count += 1;
+        if frame_count % 10 == 0 {
+            fps = 10.0 / last_time.elapsed().as_secs_f64();
+            last_time = Instant::now();
+            frame_count = 0;
+        }
 
-        // --- 按键 ---
-        if highgui::wait_key(1)? == 27 { // ESC
+        // 渲染 HUD 文字（红色）
+        let hud_text = format!("FPS: {:.1}  Res: {}x{}", fps, frame.cols, frame.rows);
+        imgproc::put_text(
+            &mut frame,
+            &hud_text,
+            imgproc::Point::new(10, 30),
+            1.0, 
+            imgproc::Scalar::new(0, 0, 255), 
+        );
+
+        // --- 跨平台窗口显示 ---
+        highgui::imshow("RustCV Camera Pipeline", &frame)?;
+
+        // --- 键盘事件与动态控制 ---
+        let key = highgui::wait_key(1)?;
+        if key == 27 { // ESC 键退出
             break;
+        }
+
+        // 按下空格键：动态修改硬件采集分辨率（热重载底层硬件管道）
+        if key == 32 {
+            high_res_mode = !high_res_mode;
+            let (w, h) = if high_res_mode { (1280, 720) } else { (640, 480) };
+            println!("🔄 Hot Reloading hardware resolution to {}x{}...", w, h);
+            
+            if let Err(e) = cap.set_resolution(w, h) {
+                eprintln!("❌ Failed to reload: {}", e);
+            }
         }
     }
 
+    // 4. 清理资源 (底层管线会自动妥善 Drop，手动调用更加规范)
+    highgui::destroy_all_windows()?;
     Ok(())
 }
 ```
@@ -124,14 +161,14 @@ fn main() -> Result<()> {
 运行示例：
 
 ```bash
-cargo run
+cargo run --example camera_demo -p rustcv
 ```
 
 ![RustCV Camera](./assets/images/demo.png)
 
 ## 🏗️ 架构 (Architecture)
 
-RustCV 采用**门面模式 (Facade Pattern)** 设计，底层模块化，上层统一化。
+RustCV 采用**门面模式 (Facade Pattern)** 设计，底层模块化，上层统一化。它会在编译期根据操作系统的宏来强制包含正确的实现后端，从而确保多平台下的绝对可靠性。
 
 ```mermaid
 graph TD
@@ -153,13 +190,15 @@ graph TD
 
     RT --> Core
 
-    subgraph "Backends (Auto Selected)"
+    subgraph "Hardware Backends (Compile-Time OS Gates)"
         V4L2[rustcv-backend-v4l2]
         AVF[rustcv-backend-avf]
+        MSMF[rustcv-backend-msmf]
     end
 
     Core --> V4L2
     Core --> AVF
+    Core --> MSMF
 
     style User fill:#f9f,stroke:#333,stroke-width:2px
     style RustCV fill:#bbf,stroke:#333,stroke-width:2px
@@ -167,7 +206,7 @@ graph TD
 
 ## 🤝 贡献 (Contributing)
 
-我们欢迎任何形式的贡献！无论是提交 Issue，还是为特定 OS 添加 Backend 实现。
+我们欢迎任何形式的贡献！无论是提交 Issue、补全代码测试，还是移植全新的视觉算法，都非常欢迎！
 
 1.  Fork 本仓库
 2.  创建你的 Feature 分支 (`git checkout -b feature/AmazingFeature`)
