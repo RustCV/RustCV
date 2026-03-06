@@ -43,7 +43,7 @@ impl Driver for AvfDriver {
                 AVCaptureDeviceTypeExternal,
             ]);
 
-            // 【修正 1】直接获取 session，不需要 Option 解包
+            // 直接获取 session，不需要 Option 解包
             // 这个方法返回 Retained<AVCaptureDeviceDiscoverySession>，永远不为 nil
             let session =
                 AVCaptureDeviceDiscoverySession::discoverySessionWithDeviceTypes_mediaType_position(
@@ -52,7 +52,7 @@ impl Driver for AvfDriver {
                     AVCaptureDevicePosition::Unspecified,
                 );
 
-            // 【修正 2】直接遍历
+            // 直接遍历
             // session.devices() 返回 Retained<NSArray<AVCaptureDevice>>
             // 这是一个实现了 IntoIterator 的类型
             for dev in session.devices() {
@@ -70,10 +70,10 @@ impl Driver for AvfDriver {
     fn open(
         &self,
         id: &str,
-        _config: CameraConfig,
+        config: CameraConfig,
     ) -> Result<(Box<dyn Stream>, DeviceControls), CameraError> {
-        let stream = stream::AvfStream::new(id)
-            .map_err(|e| CameraError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        let stream = stream::AvfStream::new(id, config)
+            .map_err(|e| CameraError::Io(std::io::Error::other(e)))?;
         let controls = create_dummy_controls();
         Ok((Box::new(stream), controls))
     }
