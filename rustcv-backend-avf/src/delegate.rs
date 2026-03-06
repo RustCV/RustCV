@@ -27,7 +27,7 @@ use objc2_core_video::{
     CVPixelBufferLockFlags, CVPixelBufferUnlockBaseAddress,
 };
 use objc2_foundation::{NSObject, NSObjectProtocol};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::Sender;
 
 // ---------------------------------------------------------------------------
 // 帧数据包：携带从 CVPixelBuffer 中读取的所有信息
@@ -54,7 +54,7 @@ pub struct AvfFrameData {
 /// Delegate 内部持有的状态。
 /// 使用独立结构体，避免在 ivar 中直接使用泛型类型。
 pub struct DelegateIvars {
-    pub sender: UnboundedSender<AvfFrameData>,
+    pub sender: Sender<AvfFrameData>,
 }
 
 // ---------------------------------------------------------------------------
@@ -123,8 +123,8 @@ define_class!(
                             timestamp_ns,
                         };
 
-                        // 6. 非阻塞发送（若接收端已关闭则静默丢弃）
-                        let _ = sender.send(frame);
+                        // 6. 非阻塞发送（若满则丢弃最新采集的帧，与 alwaysDiscardsLateVideoFrames 配合）
+                        let _ = sender.try_send(frame);
                     }
 
                     // 7. 解锁（必须与 Lock 严格配对，无论数据是否有效）
@@ -160,7 +160,7 @@ impl CaptureDelegate {
     /// 这是 objc2 0.6 文档中唯一正确的带 ivar 初始化的对象构造方式。
     /// 不能使用 `msg_send![Self::class(), new]`，因为 `new` = alloc+init 但
     /// 绕过了 `set_ivars`，导致 self.ivars() 访问 MaybeUninit 而 panic。
-    pub fn new(sender: UnboundedSender<AvfFrameData>) -> Retained<Self> {
+    pub fn new(sender: Sender<AvfFrameData>) -> Retained<Self> {
         // Step 1: 分配内存并写入 ivar 初始值
         let this: Allocated<Self> = Self::alloc();
         let this = this.set_ivars(DelegateIvars { sender });

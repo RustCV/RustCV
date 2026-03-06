@@ -18,7 +18,7 @@ use objc2_core_media::{CMTime, CMTimeFlags};
 use objc2_foundation::{NSNumber, NSString};
 use rustcv_core::builder::CameraConfig;
 use rustcv_core::error::Result as CvResult;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::{channel, Receiver};
 
 use rustcv_core::frame::{BackendBufferHandle, Frame, FrameMetadata, Timestamp};
 use rustcv_core::pixel_format::FourCC;
@@ -57,7 +57,7 @@ pub struct AvfStream {
     _output: Retained<AVCaptureVideoDataOutput>,
 
     /// 帧数据接收端
-    receiver: UnboundedReceiver<AvfFrameData>,
+    receiver: Receiver<AvfFrameData>,
     /// 当前帧（借用给 Frame<'_> 时使用）
     current_frame: Option<AvfFrameData>,
 
@@ -151,7 +151,7 @@ impl AvfStream {
             output.setAlwaysDiscardsLateVideoFrames(true);
 
             // ⑦ 绑定 Delegate 和 GCD 串行队列
-            let (tx, rx) = unbounded_channel::<AvfFrameData>();
+            let (tx, rx) = channel::<AvfFrameData>(2);
             let delegate = CaptureDelegate::new(tx);
             let queue = crate::gcd::capture_queue();
 

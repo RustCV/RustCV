@@ -124,30 +124,17 @@ pub fn destroy_all_windows() -> Result<()> {
 // --- 内部辅助函数 (保持不变) ---
 fn mat_to_u32_buffer(mat: &Mat) -> Result<Vec<u32>> {
     let pixel_count = (mat.rows * mat.cols) as usize;
-    let mut buffer = Vec::with_capacity(pixel_count);
-    let channels = mat.channels as usize;
+    // 提前分配并初始化，避免 debug 模式下的 capacity/push 检查开销
+    let mut buffer = vec![0u32; pixel_count];
 
-    if channels != 3 {
-        return Err(anyhow!("Currently only supports 3-channel (BGR) images"));
-    }
+    // 使用 chunks_exact 配合 zip，编译器会自动进行 SIMD 展开和去边界检查
+    for (src_chunk, dst_pixel) in mat.data.chunks_exact(3).zip(buffer.iter_mut()) {
+        let b = src_chunk[0] as u32;
+        let g = src_chunk[1] as u32;
+        let r = src_chunk[2] as u32;
 
-    for r in 0..mat.rows {
-        let row_data = mat.row_bytes(r);
-
-        for c in 0..mat.cols as usize {
-            let pixel_offset = c * channels;
-            if pixel_offset + 2 >= row_data.len() {
-                continue;
-            }
-
-            let b = row_data[pixel_offset] as u32;
-            let g = row_data[pixel_offset + 1] as u32;
-            let r = row_data[pixel_offset + 2] as u32;
-
-            // Pack: 00 | R | G | B
-            let pixel = (r << 16) | (g << 8) | b;
-            buffer.push(pixel);
-        }
+        // Pack: 00 | R | G | B
+        *dst_pixel = (r << 16) | (g << 8) | b;
     }
 
     Ok(buffer)
