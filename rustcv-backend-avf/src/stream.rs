@@ -39,7 +39,7 @@ static AVF_HANDLE: AvfBufferHandle = AvfBufferHandle;
 
 // kCVPixelFormatType_32BGRA = 'BGRA' = 0x42_47_52_41 = 1_111_970_369
 // FourCC: 'B'=0x42, 'G'=0x47, 'R'=0x52, 'A'=0x41  (big-endian u32)
-// ⚠️ 错误旧值 875_704_422 = 0x34_32_30_66 = '420f' = NV12 双平面 YUV！
+// 错误旧值 875_704_422 = 0x34_32_30_66 = '420f' = NV12 双平面 YUV！
 const PIXEL_FORMAT_BGRA: u32 = 1_111_970_369;
 
 // ---------------------------------------------------------------------------
@@ -79,21 +79,21 @@ impl AvfStream {
     /// * `config` — 采集配置（分辨率、FPS 等）
     pub fn new(device_id: &str, config: CameraConfig) -> Result<Self> {
         unsafe {
-            // ①  创建 Session
+            // 创建 Session
             let session = AVCaptureSession::new();
 
-            // ② 开始修改配置
+            // 开始修改配置
             session.beginConfiguration();
 
-            // ③ 查找设备
+            // 查找设备
             let device = AVCaptureDevice::deviceWithUniqueID(&NSString::from_str(device_id))
                 .ok_or_else(|| anyhow!("Device ID not found: {}", device_id))?;
 
-            // ④ 根据 config 选择最合适的分辨率 Preset
+            // 根据 config 选择最合适的分辨率 Preset
             let preset = select_best_preset(&session, &config);
             session.setSessionPreset(preset);
 
-            // ⑤ 配置 FPS (用 catch 包裹，因为如果申请了设备不支持的 FPS 会抛出 Objective-C 异常)
+            // 配置 FPS (用 catch 包裹，因为如果申请了设备不支持的 FPS 会抛出 Objective-C 异常)
             if let Some((fps, _priority)) = config.fps_req {
                 if device.lockForConfiguration().is_ok() {
                     let device_ref = std::panic::AssertUnwindSafe(&device);
