@@ -301,6 +301,7 @@ impl VideoCapture {
     }
 
     // 内部辅助：解决设备 ID 的平台差异
+    #[allow(unused_variables)]
     fn resolve_device_id(driver: &dyn Driver, index: u32) -> Result<String> {
         #[cfg(target_os = "linux")]
         {
