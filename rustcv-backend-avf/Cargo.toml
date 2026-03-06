@@ -30,7 +30,7 @@ async-trait = "0.1"
 
 # --- macOS 原生绑定 (核心依赖) ---
 # 用于编写 Objective-C 类 (Delegate)
-objc2 = "0.6"
+objc2 = { version = "0.6", features = ["exception"] }
 block2 = "0.6"
 dispatch2 = "0.3"
 objc2-foundation = { version = "0.3", features = [
@@ -48,10 +48,12 @@ objc2-av-foundation = { version = "0.3", features = [
     "AVCaptureVideoDataOutput",
     "AVMediaFormat",
     "AVCaptureSessionPreset",
+    "objc2-core-media",
 ] }
 objc2-core-media = { version = "0.3", features = ["CMSampleBuffer", "CMTime"] }
 objc2-core-video = { version = "0.3", features = ["CVPixelBuffer", "CVReturn"] }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"                                   # camera_view 示例错误处理
 minifb = "0.24"                                  # 用于示例显示窗口
