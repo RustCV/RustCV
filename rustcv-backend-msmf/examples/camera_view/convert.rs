@@ -1,3 +1,5 @@
+#![cfg(target_os = "windows")]
+
 use rustcv_core::pixel_format::{FourCC, PixelFormat};
 
 pub fn yuyv_to_rgb32(src: &[u8], dest: &mut [u32], width: usize, height: usize, stride: usize) {
