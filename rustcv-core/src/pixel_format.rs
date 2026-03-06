@@ -51,6 +51,8 @@ impl FourCC {
     pub const RGB3: Self = Self::new(b'R', b'G', b'B', b'3');
     /// RGBA32
     pub const RGBA: Self = Self::new(b'R', b'G', b'B', b'A');
+    /// BGRA32 (Blue, Green, Red, Alpha)
+    pub const BGRA: Self = Self::new(b'B', b'G', b'R', b'A');
 
     // --- Compressed Formats ---
     /// Motion-JPEG - 用于节省 USB 带宽
@@ -111,7 +113,7 @@ impl PixelFormat {
             Self::Known(cc) => match *cc {
                 FourCC::YUYV | FourCC::UYVY => 16,
                 FourCC::BGR3 | FourCC::RGB3 => 24,
-                FourCC::RGBA => 32,
+                FourCC::RGBA | FourCC::BGRA => 32,
                 FourCC::NV12 | FourCC::YV12 => 12, // 平均 12 bpp
                 FourCC::Z16 => 16,
                 // Bayer 8-bit

@@ -2,7 +2,7 @@
 name = "rustcv"
 version = "0.1.2"
 edition = "2021"
-authors = ["Leon <echo_ai@foxmail.com>"]
+authors = ["Leon <leon@leonrust.com>"]
 description = "A high-performance computer vision library for Rust."
 license = "MIT"
 repository = "https://github.com/RustCV/RustCV"
@@ -18,12 +18,6 @@ exclude = ["assets/*", ".github/*"]
 readme = "../README.md"
 
 [features]
-default = ["backend-auto"]
-# 自动后端选择逻辑：根据 OS 开启对应 feature
-backend-auto = ["linux-v4l2", "macos-avf", "windows-msmf"]
-linux-v4l2 = ["dep:rustcv-backend-v4l2"]
-macos-avf = ["dep:rustcv-backend-avf"]
-windows-msmf = ["dep:rustcv-backend-msmf"]
 turbojpeg = ["dep:turbojpeg"]
 
 [dependencies]
@@ -53,12 +47,12 @@ turbojpeg = { version = "1.4", optional = true }
 # --- GUI (HighGUI) ---
 minifb = "0.24"
 
-# --- 后端驱动 (根据系统自动开启) ---
+# --- 后端驱动 (根据平台自动加载，无需 features) ---
 [target.'cfg(target_os = "linux")'.dependencies]
-rustcv-backend-v4l2 = { version = "0.1", path = "../rustcv-backend-v4l2", optional = true }
+rustcv-backend-v4l2 = { version = "0.1", path = "../rustcv-backend-v4l2" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-rustcv-backend-avf = { version = "0.1", path = "../rustcv-backend-avf", optional = true }
+rustcv-backend-avf = { version = "0.1", path = "../rustcv-backend-avf" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-rustcv-backend-msmf = { version = "0.1", path = "../rustcv-backend-msmf", optional = true }
+rustcv-backend-msmf = { version = "0.1", path = "../rustcv-backend-msmf" }

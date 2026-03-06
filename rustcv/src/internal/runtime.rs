@@ -18,6 +18,7 @@ pub fn get_runtime() -> &'static Runtime {
 }
 
 /// 辅助函数：在后台运行 Future 并阻塞等待结果
+#[allow(dead_code)]
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     get_runtime().block_on(future)
 }

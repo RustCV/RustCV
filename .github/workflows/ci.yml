@@ -20,11 +20,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+            features: "backend-auto"
           - os: macos-latest
-            target: x86_64-apple-darwin
+            features: "backend-auto"
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
+            features: "backend-auto"
 
     steps:
       - name: Checkout code
@@ -48,10 +48,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Cargo Check
-        run: cargo check --workspace --verbose
+        run: cargo check --workspace --all-targets --features ${{ matrix.features }} --verbose
 
       - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy --workspace --all-targets --features ${{ matrix.features }} -- -D warnings
 
       - name: Run Tests
-        run: cargo test --workspace --verbose
+        run: cargo test --workspace --all-targets --features ${{ matrix.features }} --verbose

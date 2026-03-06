@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use rustcv_core::traits::Driver;
 
 /// 后端枚举，用于内部标记当前使用的是哪个驱动
@@ -11,35 +11,38 @@ pub enum BackendType {
 
 /// 创建驱动实例的工厂函数
 pub fn create_driver() -> Result<Box<dyn Driver>> {
-    #[cfg(all(feature = "linux-v4l2", target_os = "linux"))]
+    // 根据当前操作系统，直接选用原生后端 (不再需要 feature 门控)
+    #[cfg(target_os = "linux")]
     {
-        return Ok(Box::new(rustcv_backend_v4l2::V4l2Driver::new()));
+        Ok(Box::new(rustcv_backend_v4l2::V4l2Driver::new()))
     }
 
-    #[cfg(all(feature = "macos-avf", target_os = "macos"))]
+    #[cfg(target_os = "macos")]
     {
-        // 注意：这里假设你之前的 AVF Driver 结构体名为 AvfDriver
-        return Ok(Box::new(rustcv_backend_avf::AvfDriver::new()));
+        Ok(Box::new(rustcv_backend_avf::AvfDriver::new()))
     }
 
-    #[cfg(all(feature = "windows-msmf", target_os = "windows"))]
+    #[cfg(target_os = "windows")]
     {
-        // 注意：这里假设你之前的 MSMF Driver 结构体名为 MsmfDriver
-        return Ok(Box::new(rustcv_backend_msmf::MsmfDriver::new()));
+        Ok(Box::new(rustcv_backend_msmf::MsmfDriver::new()))
     }
 
-    // 如果没有匹配的后端，返回错误
-    Err(anyhow!(
-        "No supported backend found for this OS. Please check Cargo features."
-    ))
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        // 如果没有匹配的后端，返回错误
+        Err(anyhow!(
+            "No supported backend found for this OS. Please check Cargo features."
+        ))
+    }
 }
 
 /// 辅助：获取首选后端类型
 pub fn default_backend() -> BackendType {
-    #[cfg(target_os = "linux")]
-    return BackendType::V4L2;
-    #[cfg(target_os = "macos")]
-    return BackendType::AVFoundation;
-
-    BackendType::Dummy
+    if cfg!(target_os = "linux") {
+        BackendType::V4L2
+    } else if cfg!(target_os = "macos") {
+        BackendType::AVFoundation
+    } else {
+        BackendType::Dummy
+    }
 }

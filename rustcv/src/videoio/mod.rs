@@ -201,6 +201,8 @@ impl VideoCapture {
                 let fcc = FourCC(fourcc);
                 if fcc == FourCC::YUYV {
                     yuyv_to_bgr(&data, &mut mat.data, width as usize, height as usize);
+                } else if fcc == FourCC::BGRA {
+                    bgra_to_bgr(&data, &mut mat.data, width as usize, height as usize);
                 } else if fcc == FourCC::MJPEG {
                     // === TurboJPEG v1.4.0 极速解码 ===
                     #[cfg(feature = "turbojpeg")]
@@ -375,5 +377,22 @@ fn clamp(val: i32) -> u8 {
         255
     } else {
         val as u8
+    }
+}
+
+// 辅助：BGRA -> BGR
+fn bgra_to_bgr(src: &[u8], dest: &mut [u8], width: usize, height: usize) {
+    let src_len = width * height * 4;
+    let dst_len = width * height * 3;
+    if src.len() < src_len || dest.len() < dst_len {
+        return;
+    }
+    for (s_chunk, d_chunk) in src[..src_len]
+        .chunks_exact(4)
+        .zip(dest[..dst_len].chunks_exact_mut(3))
+    {
+        d_chunk[0] = s_chunk[0]; // B
+        d_chunk[1] = s_chunk[1]; // G
+        d_chunk[2] = s_chunk[2]; // R
     }
 }
