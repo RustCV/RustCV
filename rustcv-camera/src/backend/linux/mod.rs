@@ -18,7 +18,9 @@
 ///    每次打开后禁用 `exposure_dynamic_framerate` —— 防止摄像头在低光照下降至 10fps。
 use std::os::fd::RawFd;
 
-use super::v4l2_sys;
+mod sys;
+use sys as v4l2_sys;
+
 use super::RawFrame;
 use crate::config::{CameraConfig, ResolvedConfig};
 use crate::error::{CameraError, Result};

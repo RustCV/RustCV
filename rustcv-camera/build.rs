@@ -8,11 +8,11 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn build_avf_bridge() {
-    println!("cargo:rerun-if-changed=src/backend/avf_bridge.m");
-    println!("cargo:rerun-if-changed=src/backend/avf_bridge.h");
+    println!("cargo:rerun-if-changed=src/backend/macos/bridge.m");
+    println!("cargo:rerun-if-changed=src/backend/macos/bridge.h");
 
     cc::Build::new()
-        .file("src/backend/avf_bridge.m")
+        .file("src/backend/macos/bridge.m")
         // Enable Automatic Reference Counting — simplifies ObjC memory management.
         .flag("-fobjc-arc")
         // Enable Clang modules for AVFoundation/CoreMedia/CoreVideo headers.

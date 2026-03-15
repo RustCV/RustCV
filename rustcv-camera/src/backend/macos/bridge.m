@@ -44,7 +44,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include "avf_bridge.h"
+#include "bridge.h"
 
 // ─── AvfCameraOpaque ─────────────────────────────────────────────────────────
 

@@ -1,8 +1,8 @@
 /// macOS AVFoundation camera backend.
 /// macOS AVFoundation 摄像头后端。
 ///
-/// Wraps the thin Objective-C bridge (`avf_bridge.m`) via FFI.
-/// 通过 FFI 封装薄 Objective-C 桥接层（`avf_bridge.m`）。
+/// Wraps the thin Objective-C bridge (`bridge.m`) via FFI.
+/// 通过 FFI 封装薄 Objective-C 桥接层（`bridge.m`）。
 ///
 /// ## Architecture
 ///
@@ -166,7 +166,7 @@ impl AvfBackend {
         self.cam = cam_ptr;
 
         // Pre-allocate the frame buffer for the requested resolution (BGRA32).
-        // The bridge (avf_bridge.m) guarantees frames are delivered at exactly
+        // The bridge (bridge.m) guarantees frames are delivered at exactly
         // (actual_w × actual_h) via vImage scaling, so no headroom is needed.
         // 按请求分辨率预分配帧缓冲区（BGRA32）。
         // bridge 通过 vImage 缩放保证每帧都以 (actual_w × actual_h) 交付，

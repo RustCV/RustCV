@@ -57,24 +57,21 @@ pub(crate) struct RawFrame<'a> {
 // ─── Platform backends ───────────────────────────────────────────────────────
 
 #[cfg(target_os = "linux")]
-pub(crate) mod v4l2_sys;
-
-#[cfg(target_os = "linux")]
-pub(crate) mod v4l2;
+pub(crate) mod linux;
 
 #[cfg(target_os = "macos")]
-pub(crate) mod avf;
+pub(crate) mod macos;
 
 #[cfg(target_os = "windows")]
-pub(crate) mod msmf;
+pub(crate) mod windows;
 
 // ─── PlatformBackend type alias ──────────────────────────────────────────────
 
 #[cfg(target_os = "linux")]
-pub(crate) use v4l2::V4l2Backend as PlatformBackend;
+pub(crate) use linux::V4l2Backend as PlatformBackend;
 
 #[cfg(target_os = "macos")]
-pub(crate) use avf::AvfBackend as PlatformBackend;
+pub(crate) use macos::AvfBackend as PlatformBackend;
 
 #[cfg(target_os = "windows")]
-pub(crate) use msmf::MsmfBackend as PlatformBackend;
+pub(crate) use windows::MsmfBackend as PlatformBackend;
