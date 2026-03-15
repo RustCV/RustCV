@@ -6,6 +6,7 @@ members = [
     "rustcv-backend-v4l2",
     "rustcv-core",
     "rustcv-simulation",
+    "rustcv-camera",
 ]
 resolver = "2"
 
