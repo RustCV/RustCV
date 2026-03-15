@@ -5,7 +5,7 @@ edition = "2021"
 description = "Cross-platform camera capture library with zero-copy and OpenCV-compatible API"
 authors = ["Leon <leon@leonrust.com>"]
 repository = "https://github.com/rustcv/rustcv"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 keywords = ["camera", "webcam", "v4l2", "capture", "computer-vision"]
 categories = ["multimedia::video", "hardware-support"]
 
