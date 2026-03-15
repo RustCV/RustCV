@@ -1872,7 +1872,6 @@ dependencies = [
  "rustcv-backend-avf",
  "rustcv-backend-msmf",
  "rustcv-backend-v4l2",
- "rustcv-camera",
  "rustcv-core",
  "rusttype",
  "thiserror 1.0.69",
