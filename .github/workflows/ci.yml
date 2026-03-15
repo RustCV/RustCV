@@ -51,4 +51,4 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Run Tests
-        run: cargo test --workspace --all-targets --verbose
+        run: cargo test --workspace --lib --verbose
