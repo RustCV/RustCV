@@ -95,7 +95,11 @@ fn bench_videocapture_read(c: &mut Criterion) {
 /// Compares capture FPS at 480p, 720p, and 1080p.
 /// 对比 480p、720p、1080p 下的采集 FPS。
 fn bench_resolutions(c: &mut Criterion) {
-    let resolutions = [(640u32, 480u32, "480p"), (1280, 720, "720p"), (1920, 1080, "1080p")];
+    let resolutions = [
+        (640u32, 480u32, "480p"),
+        (1280, 720, "720p"),
+        (1920, 1080, "1080p"),
+    ];
 
     let mut group = c.benchmark_group("resolution");
     group.sample_size(10);
@@ -171,7 +175,10 @@ fn bench_detailed_stats(c: &mut Criterion) {
             // 排序间隔用于百分位数计算。
             intervals.sort();
             let p99_idx = (intervals.len() as f64 * 0.99) as usize;
-            let p99 = intervals.get(p99_idx.min(intervals.len() - 1)).copied().unwrap_or_default();
+            let p99 = intervals
+                .get(p99_idx.min(intervals.len() - 1))
+                .copied()
+                .unwrap_or_default();
             let max_interval = intervals.last().copied().unwrap_or_default();
             let avg_fps = n as f64 / total.as_secs_f64();
 
@@ -183,7 +190,10 @@ fn bench_detailed_stats(c: &mut Criterion) {
                 "│ Drop rate:        {:>5.1}%                        │",
                 dropped as f64 / (n + dropped) as f64 * 100.0
             );
-            eprintln!("│ Average FPS:      {:>6.1}                       │", avg_fps);
+            eprintln!(
+                "│ Average FPS:      {:>6.1}                       │",
+                avg_fps
+            );
             eprintln!(
                 "│ P99 interval:     {:>6.2}ms                     │",
                 p99.as_secs_f64() * 1000.0

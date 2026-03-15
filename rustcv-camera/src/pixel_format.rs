@@ -58,6 +58,15 @@ pub enum PixelFormat {
     /// 标准显示顺序。需要通道交换以兼容 OpenCV。
     Rgb24,
 
+    /// BGRA 32-bit format (Blue-Green-Red-Alpha, 4 bytes per pixel).
+    /// Native output from macOS AVFoundation (kCVPixelFormatType_32BGRA).
+    /// The Alpha channel is ignored during decode; only BGR is used.
+    ///
+    /// BGRA 32 位格式（蓝-绿-红-透明度，每像素 4 字节）。
+    /// macOS AVFoundation 的原生输出格式（kCVPixelFormatType_32BGRA）。
+    /// 解码时忽略 Alpha 通道，仅使用 BGR。
+    Bgra32,
+
     /// Unknown or unsupported format, stored as raw FourCC value.
     /// 未知或不支持的格式，存储为原始 FourCC 值。
     Other(u32),
@@ -78,6 +87,9 @@ pub mod fcc {
     pub const NV12: u32 = fourcc(b'N', b'V', b'1', b'2');
     pub const BGR24: u32 = fourcc(b'B', b'G', b'R', b'3');
     pub const RGB24: u32 = fourcc(b'R', b'G', b'B', b'3');
+    /// BGRA32 FourCC — matches V4L2 BGR4 / macOS kCVPixelFormatType_32BGRA.
+    /// BGRA32 FourCC —— 对应 V4L2 BGR4 / macOS kCVPixelFormatType_32BGRA。
+    pub const BGRA32: u32 = fourcc(b'B', b'G', b'R', b'4');
 }
 
 impl PixelFormat {
@@ -90,6 +102,7 @@ impl PixelFormat {
             fcc::NV12 => Self::Nv12,
             fcc::BGR24 => Self::Bgr24,
             fcc::RGB24 => Self::Rgb24,
+            fcc::BGRA32 => Self::Bgra32,
             other => Self::Other(other),
         }
     }
@@ -103,6 +116,7 @@ impl PixelFormat {
             Self::Nv12 => fcc::NV12,
             Self::Bgr24 => fcc::BGR24,
             Self::Rgb24 => fcc::RGB24,
+            Self::Bgra32 => fcc::BGRA32,
             Self::Other(v) => v,
         }
     }

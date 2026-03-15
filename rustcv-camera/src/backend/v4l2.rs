@@ -19,6 +19,7 @@
 use std::os::fd::RawFd;
 
 use super::v4l2_sys;
+use super::RawFrame;
 use crate::config::{CameraConfig, ResolvedConfig};
 use crate::error::{CameraError, Result};
 use crate::pixel_format::PixelFormat;
@@ -89,44 +90,6 @@ pub(crate) struct V4l2Backend {
     /// Whether streaming is currently active.
     /// 流是否正在运行。
     streaming: bool,
-}
-
-/// Raw frame data returned by [`V4l2Backend::dequeue`].
-/// [`V4l2Backend::dequeue`] 返回的原始帧数据。
-///
-/// The lifetime `'a` is tied to the backend (and its mmap buffers).
-/// This ensures the data reference is valid as long as the backend exists.
-/// 生命周期 `'a` 绑定到后端（及其 mmap 缓冲区）。
-/// 这确保数据引用在后端存在期间始终有效。
-pub(crate) struct RawFrame<'a> {
-    /// V4L2 buffer index — needed to re-queue the buffer via [`V4l2Backend::queue`].
-    /// V4L2 缓冲区索引 —— 通过 [`V4l2Backend::queue`] 归还缓冲区时需要。
-    #[allow(dead_code)]
-    pub index: usize,
-
-    /// Slice of the mmap buffer containing only the valid frame data (`bytesused` bytes).
-    /// mmap 缓冲区的切片，仅包含有效帧数据（`bytesused` 字节）。
-    ///
-    /// For MJPEG this is typically ~88KB, while the full buffer might be 614KB.
-    /// This avoids passing garbage trailing bytes to the JPEG decoder.
-    /// 对于 MJPEG，这通常约 88KB，而完整缓冲区可能为 614KB。
-    /// 这避免了将尾部垃圾字节传给 JPEG 解码器。
-    pub data: &'a [u8],
-
-    pub width: u32,
-    pub height: u32,
-    pub pixel_format: PixelFormat,
-
-    /// Driver-assigned frame sequence number.
-    /// 驱动分配的帧序号。
-    ///
-    /// If consecutive frames have `sequence` gap > 1, frames were dropped by the driver.
-    /// 如果连续帧的 `sequence` 间隔 > 1，说明驱动丢弃了帧。
-    pub sequence: u64,
-
-    /// Kernel timestamp in microseconds.
-    /// 内核时间戳（微秒）。
-    pub timestamp_us: u64,
 }
 
 impl V4l2Backend {

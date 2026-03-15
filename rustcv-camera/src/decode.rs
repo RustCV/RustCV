@@ -66,6 +66,14 @@ pub fn decode_frame(
             mat.ensure_size(h, w, 3);
             rgb_to_bgr(frame.data(), mat.data_mut());
         }
+        PixelFormat::Bgra32 => {
+            // BGRA32 → BGR24: drop the alpha channel.
+            // macOS AVFoundation native format (kCVPixelFormatType_32BGRA).
+            // BGRA32 → BGR24：去掉 Alpha 通道。
+            // macOS AVFoundation 原生格式（kCVPixelFormatType_32BGRA）。
+            mat.ensure_size(h, w, 3);
+            bgra32_to_bgr(frame.data(), mat.data_mut());
+        }
         other => {
             return Err(CameraError::DecodeError(format!(
                 "unsupported pixel format for decode: {:?}",
@@ -179,6 +187,22 @@ pub fn yuyv_to_bgr(src: &[u8], dst: &mut [u8], width: usize, height: usize) {
         dst[di + 3] = clamp((298 * c1 + 516 * u + 128) >> 8); // B
         dst[di + 4] = clamp((298 * c1 - 100 * u - 208 * v + 128) >> 8); // G
         dst[di + 5] = clamp((298 * c1 + 409 * v + 128) >> 8); // R
+    }
+}
+
+// ─── BGRA32 → BGR24 ─────────────────────────────────────────────────────────
+
+/// Drop the alpha channel from BGRA32 to produce BGR24.
+/// 从 BGRA32 去掉 Alpha 通道，生成 BGR24。
+///
+/// Input:  [B, G, R, A, B, G, R, A, ...]  (4 bytes/pixel)
+/// Output: [B, G, R, B, G, R, ...]        (3 bytes/pixel)
+pub fn bgra32_to_bgr(src: &[u8], dst: &mut [u8]) {
+    for (s, d) in src.chunks_exact(4).zip(dst.chunks_exact_mut(3)) {
+        d[0] = s[0]; // B
+        d[1] = s[1]; // G
+        d[2] = s[2]; // R
+                     // s[3] = A, discarded
     }
 }
 

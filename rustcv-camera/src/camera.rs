@@ -73,7 +73,14 @@ impl Camera {
     /// ).unwrap();
     /// ```
     pub fn open_with(index: u32, config: CameraConfig) -> Result<Self> {
+        // Linux: V4L2 uses /dev/videoN device paths.
+        // macOS / Windows: backends use the numeric index as a string.
+        // Linux：V4L2 使用 /dev/videoN 设备路径。
+        // macOS / Windows：后端使用数字索引的字符串形式。
+        #[cfg(target_os = "linux")]
         let device_path = format!("/dev/video{}", index);
+        #[cfg(not(target_os = "linux"))]
+        let device_path = format!("{}", index);
 
         let mut backend = backend::PlatformBackend::new();
         let resolved = backend.open(&device_path, &config)?;

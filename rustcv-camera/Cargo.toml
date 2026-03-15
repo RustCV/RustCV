@@ -21,10 +21,14 @@ libc = "0.2"
 v4l2-sys-mit = "0.3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-# TODO: AVFoundation bindings
+# AVFoundation backend uses a thin ObjC bridge compiled via build.rs (cc crate).
+# No extra Rust runtime dependencies — frameworks linked via cargo:rustc-link-lib.
 
 [target.'cfg(target_os = "windows")'.dependencies]
-# TODO: Media Foundation bindings
+# TODO: Windows Media Foundation backend (stub for CI/CD compilation)
+
+[build-dependencies]
+cc = "1"
 
 [dependencies.turbojpeg]
 version = "1.4"
