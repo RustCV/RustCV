@@ -203,6 +203,8 @@ impl VideoCapture {
                     yuyv_to_bgr(&data, &mut mat.data, width as usize, height as usize);
                 } else if fcc == FourCC::BGRA {
                     bgra_to_bgr(&data, &mut mat.data, width as usize, height as usize);
+                } else if fcc == FourCC::NV12 {
+                    nv12_to_bgr(&data, &mut mat.data, width as usize, height as usize);
                 } else if fcc == FourCC::MJPEG {
                     // === TurboJPEG v1.4.0 极速解码 ===
                     #[cfg(feature = "turbojpeg")]
@@ -378,6 +380,33 @@ fn clamp(val: i32) -> u8 {
         255
     } else {
         val as u8
+    }
+}
+
+// 辅助：NV12 (semi-planar YUV 4:2:0) -> BGR
+fn nv12_to_bgr(src: &[u8], dest: &mut [u8], width: usize, height: usize) {
+    let y_size = width * height;
+    let uv_size = width * height.div_ceil(2);
+    if src.len() < y_size + uv_size || dest.len() < width * height * 3 {
+        return;
+    }
+    let uv_plane = &src[y_size..];
+    for y in 0..height {
+        let uv_row = (y / 2) * width;
+        for x in 0..width {
+            let y_val = src[y * width + x] as i32;
+            let uv_idx = uv_row + (x / 2) * 2;
+            let u = uv_plane[uv_idx] as i32 - 128;
+            let v = uv_plane[uv_idx + 1] as i32 - 128;
+            let c = y_val - 16;
+            let r = (298 * c + 409 * v + 128) >> 8;
+            let g = (298 * c - 100 * u - 208 * v + 128) >> 8;
+            let b = (298 * c + 516 * u + 128) >> 8;
+            let dst_idx = (y * width + x) * 3;
+            dest[dst_idx] = clamp(b);
+            dest[dst_idx + 1] = clamp(g);
+            dest[dst_idx + 2] = clamp(r);
+        }
     }
 }
 
