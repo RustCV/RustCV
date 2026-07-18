@@ -12,9 +12,10 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use objc2::exception::catch;
 use objc2_av_foundation::{
-    AVCaptureDevice, AVCaptureDeviceInput, AVCaptureSession, AVCaptureVideoDataOutput,
+    AVCaptureDevice, AVCaptureDeviceFormat, AVCaptureDeviceInput, AVCaptureSession,
+    AVCaptureVideoDataOutput,
 };
-use objc2_core_media::{CMTime, CMTimeFlags};
+use objc2_core_media::{CMTime, CMTimeFlags, CMVideoFormatDescriptionGetDimensions};
 use objc2_foundation::{NSNumber, NSString};
 use rustcv_core::builder::CameraConfig;
 use rustcv_core::error::Result as CvResult;
@@ -56,6 +57,9 @@ pub struct AvfStream {
     /// 输出（必须持有）
     _output: Retained<AVCaptureVideoDataOutput>,
 
+    /// 捕获设备（用于 activeFormat 配置锁）
+    device: Retained<AVCaptureDevice>,
+
     /// 帧数据接收端
     receiver: Receiver<AvfFrameData>,
     /// 当前帧（借用给 Frame<'_> 时使用）
@@ -63,6 +67,10 @@ pub struct AvfStream {
 
     /// 采集状态标志
     is_streaming: bool,
+    /// activeFormat 已设置且设备配置锁仍被持有。
+    /// 必须保持到 startRunning 之后，否则会话会把设备恢复为默认格式
+    /// （某些 UVC 设备的默认格式为竖屏）。
+    config_lock_held: bool,
 }
 
 /// # Safety
@@ -89,31 +97,6 @@ impl AvfStream {
             let device = AVCaptureDevice::deviceWithUniqueID(&NSString::from_str(device_id))
                 .ok_or_else(|| anyhow!("Device ID not found: {}", device_id))?;
 
-            // 根据 config 选择最合适的分辨率 Preset
-            let preset = select_best_preset(&session, &config);
-            session.setSessionPreset(preset);
-
-            // 配置 FPS (用 catch 包裹，因为如果申请了设备不支持的 FPS 会抛出 Objective-C 异常)
-            if let Some((fps, _priority)) = config.fps_req {
-                if device.lockForConfiguration().is_ok() {
-                    let device_ref = std::panic::AssertUnwindSafe(&device);
-                    let result = catch(|| {
-                        let duration = CMTime {
-                            value: 1,
-                            timescale: fps as i32,
-                            flags: CMTimeFlags::Valid,
-                            epoch: 0,
-                        };
-                        device_ref.setActiveVideoMinFrameDuration(duration);
-                        device_ref.setActiveVideoMaxFrameDuration(duration);
-                    });
-                    if let Err(e) = result {
-                        println!("Warning: Failed to set FPS to {fps}. Device might not support it at this resolution. Exception: {:?}", e);
-                    }
-                    device.unlockForConfiguration();
-                }
-            }
-
             // ⑥ 包装为 Input 并添加到 Session
             let input = AVCaptureDeviceInput::deviceInputWithDevice_error(&device)
                 .map_err(|e| anyhow!("Failed to create capture input: {:?}", e))?;
@@ -123,6 +106,65 @@ impl AvfStream {
             } else {
                 session.commitConfiguration();
                 return Err(anyhow!("Cannot add input to session"));
+            }
+
+            // 优先通过 activeFormat 精确选择设备格式（分辨率完全匹配时）。
+            //
+            // 仅靠 sessionPreset 不可靠：某些设备（如竖屏优先的 UVC 相机）即使
+            // canSetSessionPreset 返回 true，会话仍会选中设备的默认（竖屏）格式。
+            // 设置 activeFormat 后必须持有配置锁直到 startRunning 之后，否则
+            // commitConfiguration/startRunning 会把设备重置回默认格式。
+            let mut config_lock_held = false;
+            if let Some(format) = select_active_format(&device, &config) {
+                if device.lockForConfiguration().is_ok() {
+                    let device_ref = std::panic::AssertUnwindSafe(&device);
+                    let format_ref = std::panic::AssertUnwindSafe(&format);
+                    let requested_fps = config.fps_req.map(|(fps, _)| fps);
+                    let result = catch(|| {
+                        device_ref.setActiveFormat(&format_ref);
+                        // FPS 必须从该格式支持的范围中选取，否则抛出异常
+                        if let Some(duration) =
+                            best_frame_duration_for_format(&format_ref, requested_fps)
+                        {
+                            device_ref.setActiveVideoMinFrameDuration(duration);
+                            device_ref.setActiveVideoMaxFrameDuration(duration);
+                        }
+                    });
+                    match result {
+                        Ok(()) => config_lock_held = true,
+                        Err(e) => {
+                            println!("Warning: Failed to set activeFormat. Exception: {:?}", e);
+                            device.unlockForConfiguration();
+                        }
+                    }
+                }
+            }
+
+            if !config_lock_held {
+                // 回退：根据 config 选择最合适的分辨率 Preset
+                let preset = select_best_preset(&session, &config);
+                session.setSessionPreset(preset);
+
+                // 配置 FPS (用 catch 包裹，因为如果申请了设备不支持的 FPS 会抛出 Objective-C 异常)
+                if let Some((fps, _priority)) = config.fps_req {
+                    if device.lockForConfiguration().is_ok() {
+                        let device_ref = std::panic::AssertUnwindSafe(&device);
+                        let result = catch(|| {
+                            let duration = CMTime {
+                                value: 1,
+                                timescale: fps as i32,
+                                flags: CMTimeFlags::Valid,
+                                epoch: 0,
+                            };
+                            device_ref.setActiveVideoMinFrameDuration(duration);
+                            device_ref.setActiveVideoMaxFrameDuration(duration);
+                        });
+                        if let Err(e) = result {
+                            println!("Warning: Failed to set FPS to {fps}. Device might not support it at this resolution. Exception: {:?}", e);
+                        }
+                        device.unlockForConfiguration();
+                    }
+                }
             }
 
             // ⑥ 创建 Output，并配置像素格式和丢帧策略
@@ -174,10 +216,22 @@ impl AvfStream {
                 _delegate: delegate,
                 _input: input,
                 _output: output,
+                device,
                 receiver: rx,
                 current_frame: None,
                 is_streaming: false,
+                config_lock_held,
             })
+        }
+    }
+
+    /// 若仍持有设备配置锁则释放（在 startRunning 之后调用才安全）。
+    fn release_config_lock(&mut self) {
+        if self.config_lock_held {
+            unsafe {
+                self.device.unlockForConfiguration();
+            }
+            self.config_lock_held = false;
         }
     }
 }
@@ -194,6 +248,7 @@ impl Drop for AvfStream {
             }
             self.is_streaming = false;
         }
+        self.release_config_lock();
     }
 }
 
@@ -208,6 +263,9 @@ impl Stream for AvfStream {
         unsafe {
             self.session.startRunning();
         }
+        // activeFormat 的配置锁必须保持到 startRunning 之后才能释放，
+        // 否则会话启动时会把设备重置回默认格式。
+        self.release_config_lock();
         self.is_streaming = true;
         Ok(())
     }
@@ -266,6 +324,53 @@ impl Stream for AvfStream {
     async fn inject_frame(&mut self, _frame: Frame<'_>) -> CvResult<()> {
         Ok(())
     }
+}
+
+/// 在设备支持的格式中查找与请求分辨率完全匹配的格式（按优先级从高到低）。
+fn select_active_format(
+    device: &AVCaptureDevice,
+    config: &CameraConfig,
+) -> Option<Retained<AVCaptureDeviceFormat>> {
+    if config.resolution_req.is_empty() {
+        return None;
+    }
+
+    let mut reqs = config.resolution_req.clone();
+    reqs.sort_by_key(|&(_, _, p)| std::cmp::Reverse(p));
+
+    let formats = unsafe { device.formats() };
+    for (w, h, _) in reqs {
+        for format in &formats {
+            let desc = unsafe { format.formatDescription() };
+            let dims = unsafe { CMVideoFormatDescriptionGetDimensions(&desc) };
+            if dims.width == w as i32 && dims.height == h as i32 {
+                return Some(format);
+            }
+        }
+    }
+    None
+}
+
+/// 从格式支持的帧率范围中选取帧时长：优先匹配请求的 FPS，否则取最高帧率。
+fn best_frame_duration_for_format(
+    format: &AVCaptureDeviceFormat,
+    requested_fps: Option<u32>,
+) -> Option<CMTime> {
+    let ranges = unsafe { format.videoSupportedFrameRateRanges() };
+    let mut best: Option<(f64, CMTime)> = None;
+    for range in &ranges {
+        let max_rate = unsafe { range.maxFrameRate() };
+        let duration = unsafe { range.minFrameDuration() };
+        let score = match requested_fps {
+            // 距离请求 FPS 越近越好（负距离，便于统一取最大值）
+            Some(fps) => -(max_rate - fps as f64).abs(),
+            None => max_rate,
+        };
+        if best.map_or(true, |(s, _)| score > s) {
+            best = Some((score, duration));
+        }
+    }
+    best.map(|(_, duration)| duration)
 }
 
 /// 根据用户配置选择最佳的 AVFoundation 会话预设。
